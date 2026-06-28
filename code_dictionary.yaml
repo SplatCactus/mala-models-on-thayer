@@ -1,0 +1,939 @@
+# =============================================================================
+# BP Cascade RI — Clinical Code Dictionary
+# File: src/features/dictionaries/code_dictionary.yaml
+# Owner: Alec (Domain / Clinical Lead)
+# Version: 1.0.0
+# Last validated: 2026-06-28
+# Validation source: SyntheticRI conditions_300K sheet (N_total = 348,120)
+# =============================================================================
+#
+# USAGE
+# -----
+# This file is the single source of truth for all SNOMED, LOINC, and RxNorm
+# codes used across the feature engineering pipeline. Consume it via:
+#
+#   import yaml
+#   with open("src/features/dictionaries/code_dictionary.yaml") as f:
+#       codes = yaml.safe_load(f)
+#
+# All prevalence figures and patient counts are validated against the
+# SyntheticRI 300K datasheet. Do not edit code values without re-running
+# the cross-reference validation script.
+#
+# STRUCTURE
+# ---------
+# snomed:
+#   <category_key>:
+#     description: Human-readable category label
+#     clinical_rationale: Why this group matters for HTN persistence modeling
+#     routing_action: Which CHW action this group triggers (SDOH categories only)
+#     codes:
+#       - code: SNOMED CT code (string to preserve leading zeros)
+#         description: Official SNOMED description
+#         n_300k: Patient count in 300K cohort (validated)
+#         prevalence_pct: Prevalence % in 300K cohort (validated)
+#         feature_notes: Engineering notes for Chris / feature pipeline
+#
+# loinc:
+#   <category_key>: ...
+#
+# rxnorm:
+#   <category_key>: ...
+#
+# composite_flags:
+#   <flag_name>: List of codes that combine into a single binary feature
+# =============================================================================
+
+snomed:
+
+  # ---------------------------------------------------------------------------
+  # CATEGORY 1: HTN Primary Diagnosis & Direct Cardiovascular Sequelae
+  # These codes define and flow from essential hypertension. The primary
+  # diagnosis code (59621000) is the cohort entry criterion — a patient must
+  # have this code AND at least one antihypertensive fill to enter the study.
+  # Sequelae codes (MI, CHF, stroke, AF) are comorbidity burden features: their
+  # presence dramatically increases medication gap risk by compounding regimen
+  # complexity and patient anxiety.
+  # ---------------------------------------------------------------------------
+  htn_primary_and_sequelae:
+    description: "HTN diagnosis and direct cardiovascular sequelae"
+    clinical_rationale: >
+      Essential hypertension (59621000) is the cohort entry criterion for BP
+      Cascade RI. Downstream sequelae — ischemic heart disease, MI, CHF, stroke,
+      and atrial fibrillation — are both clinical complications of uncontrolled
+      HTN and independent predictors of medication non-persistence. Patients with
+      these comorbidities carry more complex regimens, face higher pill burden,
+      and are at elevated risk of gaps. Metabolic syndrome and hyperlipidemia are
+      included here because they co-occur with HTN in a bidirectional causal
+      relationship and are almost universally co-managed with the same clinical
+      encounter.
+    routing_action: null
+    codes:
+      - code: "59621000"
+        description: "Essential hypertension (disorder)"
+        n_300k: 81498
+        prevalence_pct: 23.4
+        feature_notes: >
+          COHORT ENTRY CRITERION. Must co-occur with ≥1 antihypertensive RxNorm
+          fill in medications.csv to qualify patient for the treated-hypertensive
+          cohort. Do not use as a predictive feature — it is a filter condition.
+
+      - code: "414545008"
+        description: "Ischemic heart disease (disorder)"
+        n_300k: 60523
+        prevalence_pct: 17.4
+        feature_notes: >
+          Binary comorbidity flag. High prevalence (17.4%) makes this a strong
+          feature. Presence signals multi-drug regimen and frequent cardiology
+          follow-up — use encounter-frequency slope in conjunction.
+
+      - code: "274531002"
+        description: "Abnormal findings diagnostic imaging heart and coronary circulation (finding)"
+        n_300k: 60775
+        prevalence_pct: 17.5
+        feature_notes: >
+          Structural cardiac change marker. Treat as binary flag. Nearly
+          identical prevalence to ischemic heart disease — likely co-occurring;
+          check co-occurrence rate in exploratory analysis.
+
+      - code: "237602007"
+        description: "Metabolic syndrome X (disorder)"
+        n_300k: 53249
+        prevalence_pct: 15.3
+        feature_notes: >
+          Bidirectional relationship with HTN. Drives insulin resistance which
+          elevates BP, and worsens HTN control. Binary flag; combine with
+          prediabetes and obesity codes in comorbidity burden score.
+
+      - code: "55822004"
+        description: "Hyperlipidemia (disorder)"
+        n_300k: 37957
+        prevalence_pct: 10.9
+        feature_notes: >
+          Standard cardiovascular risk factor. Statin co-prescription signal —
+          patients on antihypertensive + statin have higher pill burden. Binary
+          flag; cross-reference with medications.csv for statin fills.
+
+      - code: "399211009"
+        description: "History of myocardial infarction (situation)"
+        n_300k: 15763
+        prevalence_pct: 4.5
+        feature_notes: >
+          Historical MI significantly elevates gap risk. Combine with acute MI
+          codes (22298006, 401314000, 401303003) into a single mi_history flag.
+
+      - code: "22298006"
+        description: "Myocardial infarction (disorder)"
+        n_300k: 7936
+        prevalence_pct: 2.3
+        feature_notes: >
+          Active/recent MI. Roll up with 399211009, 401314000, 401303003 into
+          composite mi_any flag for the feature panel.
+
+      - code: "401314000"
+        description: "Acute non-ST segment elevation myocardial infarction (disorder)"
+        n_300k: 8609
+        prevalence_pct: 2.5
+        feature_notes: >
+          NSTEMI. Roll up into mi_any composite flag. See 22298006 notes.
+
+      - code: "401303003"
+        description: "Acute ST segment elevation myocardial infarction (disorder)"
+        n_300k: 6390
+        prevalence_pct: 1.8
+        feature_notes: >
+          STEMI. Most severe MI subtype. Roll up into mi_any composite flag.
+          Patients post-STEMI are on aggressive multi-drug therapy — high
+          complexity, high gap risk.
+
+      - code: "88805009"
+        description: "Chronic congestive heart failure (disorder)"
+        n_300k: 9668
+        prevalence_pct: 2.8
+        feature_notes: >
+          Direct HTN complication. CHF Synthea module is active. Combine with
+          84114007 into chf_any flag. CHF patients require diuretics on top of
+          antihypertensives — major pill burden driver.
+
+      - code: "84114007"
+        description: "Heart failure (disorder)"
+        n_300k: 346
+        prevalence_pct: 0.1
+        feature_notes: >
+          Lower-prevalence heart failure code. Combine with 88805009 into
+          chf_any composite flag.
+
+      - code: "230690007"
+        description: "Cerebrovascular accident (disorder)"
+        n_300k: 2062
+        prevalence_pct: 0.6
+        feature_notes: >
+          Stroke — the single most consequential HTN sequela for public health
+          messaging. Binary flag. Patients post-CVA are on antihypertensives as
+          secondary prevention; any gap is clinically dangerous.
+
+      - code: "302870006"
+        description: "Hypertriglyceridemia (disorder)"
+        n_300k: 26234
+        prevalence_pct: 7.5
+        feature_notes: >
+          Metabolic syndrome component. Associated with insulin resistance and
+          BP elevation. Binary flag; combine with metabolic syndrome code in
+          cardiometabolic burden score.
+
+      - code: "49436004"
+        description: "Atrial fibrillation (disorder)"
+        n_300k: 3206
+        prevalence_pct: 0.9
+        feature_notes: >
+          HTN is the #1 modifiable risk factor for AF. AF complicates the
+          antihypertensive regimen (anticoagulants added). Binary flag; strong
+          regimen-complexity signal — routes to pharmacist via SHAP.
+
+  # ---------------------------------------------------------------------------
+  # CATEGORY 2: Cardiometabolic Comorbidities — Bidirectional HTN Linkage
+  # Diabetes, CKD, and obesity are not downstream of HTN alone — they drive
+  # it, worsen it, and make it harder to treat. A patient with T2DM + CKD3 +
+  # obesity is on three or more medications before any antihypertensive is
+  # added. Each added drug increases the probability of a gap. These codes
+  # are the primary inputs to the regimen-complexity feature, which is the
+  # routing signal for pharmacist intervention.
+  # ---------------------------------------------------------------------------
+  cardiometabolic_comorbidities:
+    description: "Cardiometabolic comorbidities with bidirectional HTN linkage"
+    clinical_rationale: >
+      Diabetes, chronic kidney disease, and obesity form a triad of conditions
+      that are simultaneously caused by and causative of hypertension. In the
+      SyntheticRI 300K cohort, prediabetes prevalence is 38.5% and obesity 48.3%
+      — meaning roughly half the cohort has a condition that directly elevates
+      blood pressure through distinct mechanisms (insulin resistance, adipokine
+      dysregulation, renin-angiotensin activation). CKD stages 1–4 are present
+      across 28.8% of the cohort in aggregate and represent a major regimen
+      complexity driver: ACE inhibitors are first-line for CKD + HTN, but require
+      potassium and creatinine monitoring, adding lab-dependent adherence steps.
+      Post-CABG patients carry the highest multi-drug burden of any subgroup.
+    routing_action: null
+    codes:
+      - code: "714628002"
+        description: "Prediabetes (finding)"
+        n_300k: 134167
+        prevalence_pct: 38.5
+        feature_notes: >
+          Highest-prevalence cardiometabolic code. Insulin resistance drives BP
+          elevation. Binary flag. High prevalence may reduce individual
+          discriminative power; consider interaction term with obesity code.
+
+      - code: "44054006"
+        description: "Diabetes mellitus type 2 (disorder)"
+        n_300k: 26906
+        prevalence_pct: 7.7
+        feature_notes: >
+          T2DM adds metformin (and potentially insulin) to the antihypertensive
+          regimen. Known adherence drag in polypharmacy literature. Binary flag.
+          Cross-reference with medications.csv for metformin fills.
+
+      - code: "127013003"
+        description: "Disorder of kidney due to diabetes mellitus (disorder)"
+        n_300k: 35465
+        prevalence_pct: 10.2
+        feature_notes: >
+          Diabetic nephropathy. Implies both T2DM and CKD — effectively a
+          severity marker. ACE-I/ARB are indicated but require electrolyte
+          monitoring. Treat as binary flag and include in ckd_any composite.
+
+      - code: "431855005"
+        description: "Chronic kidney disease stage 1 (disorder)"
+        n_300k: 31561
+        prevalence_pct: 9.1
+        feature_notes: >
+          CKD stage 1. Include in ckd_any binary flag AND ckd_stage ordinal
+          feature (encode stages 1–4 as 1–4). Stage-specific features capture
+          the nonlinear complexity increase at stage 3+.
+
+      - code: "431856006"
+        description: "Chronic kidney disease stage 2 (disorder)"
+        n_300k: 27469
+        prevalence_pct: 7.9
+        feature_notes: >
+          CKD stage 2. See stage 1 notes. Encode in ckd_stage ordinal as 2.
+
+      - code: "433144002"
+        description: "Chronic kidney disease stage 3 (disorder)"
+        n_300k: 18995
+        prevalence_pct: 5.5
+        feature_notes: >
+          CKD stage 3. Clinical inflection point — electrolyte monitoring
+          becomes mandatory, ARB/ACE-I may be adjusted. Regimen complexity
+          spike. Encode as 3 in ckd_stage ordinal.
+
+      - code: "431857002"
+        description: "Chronic kidney disease stage 4 (disorder)"
+        n_300k: 11618
+        prevalence_pct: 3.3
+        feature_notes: >
+          CKD stage 4. Pre-dialysis. Highest complexity stage in this dataset
+          (stage 5/ESRD handled separately via 46177005). Encode as 4 in
+          ckd_stage ordinal.
+
+      - code: "162864005"
+        description: "Body mass index 30+ - obesity (finding)"
+        n_300k: 168269
+        prevalence_pct: 48.3
+        feature_notes: >
+          Strongest single modifiable driver of essential HTN. Very high
+          prevalence (48.3%) — combine with 408512008 into obesity_any flag.
+          Consider interaction term with stress and IPV codes.
+
+      - code: "408512008"
+        description: "Body mass index 40+ - severely obese (finding)"
+        n_300k: 1977
+        prevalence_pct: 0.6
+        feature_notes: >
+          Severe obesity. Roll up into obesity_any with 162864005. The distinct
+          code is a severity marker — encode separately as obesity_severe flag
+          in addition to the composite.
+
+      - code: "399261000"
+        description: "History of coronary artery bypass grafting (situation)"
+        n_300k: 24798
+        prevalence_pct: 7.1
+        feature_notes: >
+          Post-CABG patients carry the highest multi-drug burden. Binary flag.
+          Strong routing signal toward pharmacist (regimen reconciliation).
+          Cross-reference with medications.csv for antiplatelet + antihypertensive
+          co-fills.
+
+  # ---------------------------------------------------------------------------
+  # CATEGORY 3: SDOH — Modifiable Barriers (CHW Routing Signals)
+  # These are the codes that make BP Cascade RI operationally distinct from a
+  # standard risk model. Each code maps to a specific CHW routing action. The
+  # SHAP decomposition of the survival model will surface which of these
+  # dominates a given patient's risk — and that dominant driver determines
+  # who gets dispatched. Transportation barriers route to a bus voucher or
+  # mail-order Rx setup. Housing instability routes to a social worker.
+  # Isolation routes to a bilingual outreach call.
+  # ---------------------------------------------------------------------------
+  sdoh_modifiable_barriers:
+    description: "SDOH findings — modifiable barriers for CHW routing"
+    clinical_rationale: >
+      Social determinants of health are not soft background factors in
+      hypertension management — they are the proximate cause of medication
+      persistence failure for the majority of uncontrolled hypertensive patients
+      in underserved communities. Transportation access barriers prevent pharmacy
+      pickup. Housing instability disrupts medication storage and daily routine.
+      Social isolation removes the social accountability that correlates with
+      adherence. Financial barriers (unemployment, not in labor force) make
+      copays prohibitive. Low education level drives regimen confusion when
+      instructions are English-only. In the 300K cohort, over half the patients
+      are socially isolated and nearly half are not in the labor force — making
+      SDOH the dominant feature class for the Hispanic/Latino equity subgroup
+      that is the project's community focus.
+    routing_action: "variable — see feature_notes per code"
+    codes:
+      - code: "422650009"
+        description: "Social isolation (finding)"
+        n_300k: 188693
+        prevalence_pct: 54.2
+        feature_notes: >
+          Highest-prevalence SDOH barrier. Isolation predicts non-persistence
+          across all chronic disease literature. ROUTING: bilingual CHW outreach
+          call (EN/ES). Pair with 423315002 — near-identical prevalence suggests
+          co-occurrence. Create sdoh_isolation_any composite flag.
+
+      - code: "423315002"
+        description: "Limited social contact (finding)"
+        n_300k: 188562
+        prevalence_pct: 54.2
+        feature_notes: >
+          Near-identical N to 422650009. Likely co-occurring with social
+          isolation. Treat as paired flag in sdoh_isolation_any composite.
+          ROUTING: bilingual CHW outreach call.
+
+      - code: "73438004"
+        description: "Unemployed (finding)"
+        n_300k: 117599
+        prevalence_pct: 33.8
+        feature_notes: >
+          Cost-driven non-persistence. Unemployment correlates with medication
+          cost sensitivity — copay even $5 can be prohibitive. ROUTING: social
+          worker for medication assistance programs (RxAssist, RIPAE, manufacturer
+          PAP). Combine with 741062008 into sdoh_financial_barrier composite.
+
+      - code: "741062008"
+        description: "Not in labor force (finding)"
+        n_300k: 164215
+        prevalence_pct: 47.2
+        feature_notes: >
+          Broader financial strain signal than unemployed — includes disabled,
+          retired, and caregiving patients. Do NOT collapse with unemployed:
+          the underlying barrier mechanism differs. Encode both separately AND
+          as sdoh_financial_barrier composite. ROUTING: social worker.
+
+      - code: "105531004"
+        description: "Housing unsatisfactory (finding)"
+        n_300k: 43534
+        prevalence_pct: 12.5
+        feature_notes: >
+          Housing instability disrupts medication storage (temperature, security)
+          and daily routine. ROUTING: social worker for housing assistance
+          referral. Combine with 32911000 into sdoh_housing_barrier composite.
+
+      - code: "32911000"
+        description: "Homeless (finding)"
+        n_300k: 6247
+        prevalence_pct: 1.8
+        feature_notes: >
+          Extreme housing barrier. Medication refrigeration and secure storage
+          are impossible. ROUTING: social worker with shelter-based care
+          coordination. Roll into sdoh_housing_barrier composite with 105531004.
+
+      - code: "713458007"
+        description: "Lack of access to transportation (finding)"
+        n_300k: 26400
+        prevalence_pct: 7.6
+        feature_notes: >
+          Pharmacy pickup barrier. ROUTING: transportation voucher or mail-order
+          Rx enrollment. Use BOTH this code and 266934004 — they are distinct
+          SNOMED codes for the same patient reality and have nearly identical N.
+          Create sdoh_transport_barrier composite = 713458007 OR 266934004.
+
+      - code: "266934004"
+        description: "Transport problem (finding)"
+        n_300k: 26371
+        prevalence_pct: 7.6
+        feature_notes: >
+          Paired code with 713458007. Near-identical patient count (26,400 vs
+          26,371) — may represent the same patients coded under two synonymous
+          terms. ROUTING: transportation voucher. Always use in composite with
+          713458007. Confirm co-occurrence in exploratory analysis.
+
+      - code: "224295006"
+        description: "Only received primary school education (finding)"
+        n_300k: 32186
+        prevalence_pct: 9.2
+        feature_notes: >
+          Low health literacy drives regimen confusion when instructions are
+          English-only. ROUTING: CHW with simplified bilingual (EN/ES) medication
+          instructions. Create sdoh_low_education composite = 224295006 OR
+          473461003. Primary education code indicates the more severe literacy gap.
+
+      - code: "473461003"
+        description: "Educated to high school level (finding)"
+        n_300k: 81144
+        prevalence_pct: 23.3
+        feature_notes: >
+          Moderate literacy barrier. Combine with 224295006 in sdoh_low_education
+          composite. Note: 224299000 (received higher education, 48.2%) is the
+          protective counterpart — include as negative flag.
+
+  # ---------------------------------------------------------------------------
+  # CATEGORY 4: Psychosocial & Behavioral — Indirect HTN Persistence Drivers
+  # These codes do not route to a CHW directly but are powerful features in
+  # the survival model. Stress and IPV are particularly important: both
+  # elevate blood pressure through direct physiological mechanisms AND disrupt
+  # the behavioural routine that medication adherence depends on. The alcohol
+  # and tobacco codes affect antihypertensive pharmacokinetics directly.
+  # ---------------------------------------------------------------------------
+  psychosocial_behavioral:
+    description: "Psychosocial and behavioral — indirect HTN persistence drivers"
+    clinical_rationale: >
+      Chronic psychosocial stress activates the hypothalamic-pituitary-adrenal
+      axis, elevating cortisol and catecholamines, which directly raise blood
+      pressure. At 79.3% prevalence in this cohort, stress is ubiquitous —
+      its change over time (new-onset stress flag) will be more discriminative
+      than its baseline presence. IPV (43.6%) is critical for the equity story:
+      it is associated with medication sabotage by abusive partners, chaotic
+      care access, and fear of disclosing health conditions. Depression (0.5%
+      in this dataset, likely underrepresented in Synthea) is one of the
+      strongest cross-disease predictors of medication non-adherence in the
+      real-world literature. Alcohol raises blood pressure through multiple
+      mechanisms and interferes with antihypertensive metabolism. Tobacco
+      reduces antihypertensive efficacy and multiplies cardiovascular risk.
+    routing_action: null
+    codes:
+      - code: "73595000"
+        description: "Stress (finding)"
+        n_300k: 275892
+        prevalence_pct: 79.3
+        feature_notes: >
+          Very high prevalence (79.3%) limits individual discriminative power.
+          Recommend using as TIME-VARYING feature: flag new stress onset in the
+          90-day window before index_date rather than as a static binary.
+          Stress onset is a meaningful trigger for the survival model.
+
+      - code: "706893006"
+        description: "Victim of intimate partner abuse (finding)"
+        n_300k: 151655
+        prevalence_pct: 43.6
+        feature_notes: >
+          IPV at 43.6% is the highest-prevalence trauma code. Associated with
+          medication sabotage and disrupted care access. CRITICAL for equity
+          story — disproportionately affects Hispanic/Latino women. Binary flag.
+          CHW routing requires a safety-aware protocol — do NOT send standard
+          outreach call without safety screening. Flag for clinical review.
+
+      - code: "424393004"
+        description: "Reports of violence in the environment (finding)"
+        n_300k: 117476
+        prevalence_pct: 33.7
+        feature_notes: >
+          Neighborhood violence — indirect stress driver and pharmacy access
+          barrier. Binary flag. Combine with IPV code in a broader
+          trauma_exposure composite for feature engineering.
+
+      - code: "80583007"
+        description: "Severe anxiety (panic) (finding)"
+        n_300k: 41214
+        prevalence_pct: 11.8
+        feature_notes: >
+          Anxiety both mimics HTN symptoms (palpitations, elevated BP readings)
+          and worsens control. Some antihypertensives (beta-blockers) treat both
+          — this is a regimen-complexity signal. Binary flag.
+
+      - code: "370143000"
+        description: "Major depressive disorder (disorder)"
+        n_300k: 1658
+        prevalence_pct: 0.5
+        feature_notes: >
+          Low prevalence in Synthea (0.5%) but extremely high clinical weight.
+          Depression is the single strongest cross-disease predictor of
+          medication non-adherence in real-world evidence. Likely underrepresented
+          in the synthetic data — treat with care; do not discount based on N alone.
+
+      - code: "47505003"
+        description: "Posttraumatic stress disorder (disorder)"
+        n_300k: 486
+        prevalence_pct: 0.1
+        feature_notes: >
+          Very low prevalence in this cohort (veteran module). PTSD strongly
+          associated with HTN and adherence failure in veteran literature.
+          Binary flag. May be too sparse for reliable SHAP attribution — note
+          in model card.
+
+      - code: "10939881000119100"
+        description: "Unhealthy alcohol drinking behavior (finding)"
+        n_300k: 52805
+        prevalence_pct: 15.2
+        feature_notes: >
+          Alcohol raises BP via multiple mechanisms (sympathetic activation,
+          cortisol, direct vasoconstriction) and induces CYP450 enzymes that
+          alter antihypertensive metabolism. Binary flag. Note: the SNOMED code
+          is unusually long — verify exact string match when filtering
+          conditions.csv. Do not truncate.
+
+      - code: "449868002"
+        description: "Smokes tobacco daily (finding)"
+        n_300k: 3230
+        prevalence_pct: 0.9
+        feature_notes: >
+          Tobacco reduces antihypertensive efficacy and is a multiplicative
+          cardiovascular risk factor. Low prevalence (0.9%) limits model weight
+          but retain for clinical completeness and subgroup analysis.
+
+  # ---------------------------------------------------------------------------
+  # CATEGORY 5: Employment & Socioeconomic — Cost/Access Drivers
+  # Employment status is a proxy for insurance coverage and disposable income
+  # — the two most direct financial barriers to consistent Rx fills. Full-time
+  # employment is a protective factor and should be encoded as a negative risk
+  # feature (i.e., its ABSENCE is the signal). Criminal record is included
+  # because it limits insurance and employment options in RI specifically.
+  # ---------------------------------------------------------------------------
+  employment_socioeconomic:
+    description: "Employment and socioeconomic status — cost and access drivers"
+    clinical_rationale: >
+      Insurance coverage and out-of-pocket medication costs are the most
+      commonly cited barriers to antihypertensive adherence in the health
+      disparities literature. Employment status is the primary proxy for both
+      in this dataset. Full-time employment is protective — its absence (either
+      unemployed or not in labor force) is the risk signal. Rhode Island's
+      medication assistance programs (RIPAE, RxAssist) are income-tested, making
+      employment status also a routing criterion for the social worker action.
+      Criminal record history indirectly limits employment and insurance access
+      through systemic structural barriers.
+    routing_action: "social_worker (when combined with unemployed/not_in_labor_force)"
+    codes:
+      - code: "160903007"
+        description: "Full-time employment (finding)"
+        n_300k: 274964
+        prevalence_pct: 79.0
+        feature_notes: >
+          PROTECTIVE factor. Encode as negative risk feature. Use ABSENCE of
+          this code as the employment barrier signal rather than presence of
+          unemployed code alone — more robust to partial coding.
+
+      - code: "160904001"
+        description: "Part-time employment (finding)"
+        n_300k: 222772
+        prevalence_pct: 64.0
+        feature_notes: >
+          Intermediate cost barrier. Partial insurance coverage. Encode as
+          ordinal employment_status: full_time=0, part_time=1, not_in_labor_force=2,
+          unemployed=3. Do not treat as binary — the gradient matters.
+
+      - code: "266948004"
+        description: "Has a criminal record (finding)"
+        n_300k: 70121
+        prevalence_pct: 20.1
+        feature_notes: >
+          Structural access barrier. Limits employment and insurance options.
+          Binary flag. Include in financial_barrier composite alongside
+          unemployment codes.
+
+  # ---------------------------------------------------------------------------
+  # CATEGORY 6: Refugee & Migration Status — Equity-Critical Codes
+  # These codes are the most directly relevant to the competition's community
+  # focus requirement. Refugee and migrant patients face language-discordant
+  # care, documentation barriers to insurance enrollment, historical mistrust
+  # of health systems, and geographic mobility that disrupts care continuity.
+  # In the Hispanic/Latino subgroup analysis, these codes are expected to
+  # cluster — making them critical inputs to the subgroup fairness audit.
+  # ---------------------------------------------------------------------------
+  refugee_migration:
+    description: "Refugee and migration status — equity-critical codes"
+    clinical_rationale: >
+      Refugee and migrant patients represent the intersection of multiple
+      structural barriers: language-discordant care, documentation barriers to
+      insurance enrollment, historical and justified mistrust of health systems,
+      and geographic mobility that disrupts primary care continuity. For the
+      Hispanic/Latino equity focus of BP Cascade RI, these codes are expected
+      to cluster with the transportation, housing, and low-education SDOH codes,
+      forming a compounding barrier profile that a single-barrier CHW routing
+      rule cannot address. These patients require coordinated multi-barrier
+      response — the bilingual CHW outreach script is the minimum; social worker
+      co-dispatch is the appropriate default.
+    routing_action: "bilingual_chw_call + social_worker (co-dispatch)"
+    codes:
+      - code: "446654005"
+        description: "Refugee (person)"
+        n_300k: 17261
+        prevalence_pct: 5.0
+        feature_notes: >
+          Critical equity flag. Binary feature. Expected to co-occur with
+          transport, housing, and low-education SDOH codes. Use in subgroup
+          fairness audit as a stratification variable alongside ethnicity from
+          patients.csv. ROUTING: bilingual CHW + social worker co-dispatch.
+
+      - code: "160701002"
+        description: "Social migrant (finding)"
+        n_300k: 187
+        prevalence_pct: 0.1
+        feature_notes: >
+          Very low prevalence (N=187). Binary flag. Combine with 446654005
+          into migrant_any composite. May be too sparse for reliable SHAP
+          attribution individually — note in model card.
+
+
+# =============================================================================
+# LOINC — Observation Codes
+# Source: Standard LOINC registry. Validated as present in observations.csv
+# via the Synthea vitals module (vitals.json confirmed in synthea_json_files).
+# =============================================================================
+
+loinc:
+
+  blood_pressure:
+    description: "Blood pressure vital sign observations"
+    clinical_rationale: >
+      Systolic and diastolic BP trajectories are the primary clinical signal
+      for HTN control. BP slope and variability pre- and post-Rx start are
+      core features in the survival model. A rising systolic slope after
+      medication initiation is the strongest early warning of an impending
+      persistence gap. These are the only two LOINC codes required for the
+      BP trajectory feature; both are standard Synthea vitals outputs and
+      will be present in observations.csv for every encounter.
+    codes:
+      - code: "8480-6"
+        description: "Systolic blood pressure"
+        unit: "mm[Hg]"
+        feature_notes: >
+          Primary BP outcome variable. Engineer: slope over last 90 days pre-
+          index, variability (std dev), most recent value, value at Rx start.
+          Filter observations.csv on CODE == '8480-6'.
+
+      - code: "8462-4"
+        description: "Diastolic blood pressure"
+        unit: "mm[Hg]"
+        feature_notes: >
+          Secondary BP signal. Engineer same features as systolic. Diastolic
+          elevation (>90) is the more sensitive early indicator in younger
+          HTN patients. Filter observations.csv on CODE == '8462-4'.
+
+  cardiometabolic_labs:
+    description: "Lab observations for cardiometabolic comorbidity context"
+    clinical_rationale: >
+      Creatinine and potassium are the mandatory monitoring labs for patients
+      on ACE inhibitors or ARBs — the first-line antihypertensives for HTN
+      with CKD. A lab result outside range triggers a medication change, which
+      resets the persistence clock and is a leading indicator of an impending
+      gap. These lab codes are contextual features, not outcomes.
+    codes:
+      - code: "2160-0"
+        description: "Creatinine in serum or plasma"
+        unit: "mg/dL"
+        feature_notes: >
+          Renal function marker. Elevated creatinine triggers ACE-I/ARB dose
+          adjustment. Include as most-recent value and 90-day trend. Filter
+          observations.csv on CODE == '2160-0'.
+
+      - code: "6298-4"
+        description: "Potassium in blood"
+        unit: "mmol/L"
+        feature_notes: >
+          Hyperkalemia risk on ACE-I/ARB + CKD. Abnormal value triggers regimen
+          change. Include as most-recent value. Filter on CODE == '6298-4'.
+
+      - code: "2089-1"
+        description: "Cholesterol in LDL [Mass/volume] in serum or plasma"
+        unit: "mg/dL"
+        feature_notes: >
+          LDL as metabolic context feature. Elevated LDL + HTN = statin
+          co-prescription — pill burden signal. Include as most-recent value.
+
+      - code: "4548-4"
+        description: "Hemoglobin A1c/Hemoglobin.total in Blood"
+        unit: "%"
+        feature_notes: >
+          HbA1c for T2DM/prediabetes comorbidity context. Elevated A1c signals
+          uncontrolled diabetes compounding HTN management difficulty.
+
+
+# =============================================================================
+# RXNORM — Antihypertensive Medication Classes
+# Source: Synthea hypertension.json module and per-class product distribution
+# CSVs confirmed present in synthea_json_files sheet of the datasheet.
+# Validation: cross-reference fills in medications.csv against these ingredient
+# RxNorm concepts. The per-class distribution files (e.g.
+# ace_arb_lisinopril_product_distribution.csv) contain the specific product
+# RxNorm codes — pull from those files for the full product-level list.
+# =============================================================================
+
+rxnorm:
+
+  ace_inhibitors:
+    description: "ACE inhibitors — first-line antihypertensives"
+    clinical_rationale: >
+      ACE inhibitors are first-line for HTN with diabetes or CKD. Require
+      potassium and creatinine monitoring, adding lab-dependent steps that
+      increase the effective complexity of the regimen beyond pill count alone.
+    synthea_distribution_file: "ace_arb_ingredient_distribution.csv"
+    ingredient_concepts:
+      - rxnorm: "29046"
+        name: "lisinopril"
+        product_file: "ace_arb_lisinopril_product_distribution.csv"
+      - rxnorm: "18867"
+        name: "benazepril"
+        product_file: "ace_arb_benazepril_product_distribution.csv"
+      - rxnorm: "3827"
+        name: "enalapril"
+        product_file: "ace_arb_enalapril_product_distribution.csv"
+      - rxnorm: "35208"
+        name: "quinapril"
+        product_file: "ace_arb_quinapril_product_distribution.csv"
+      - rxnorm: "35296"
+        name: "ramipril"
+        product_file: "ace_arb_ramipril_product_distribution.csv"
+
+  arbs:
+    description: "Angiotensin receptor blockers — first-line antihypertensives"
+    clinical_rationale: >
+      ARBs are equivalent to ACE inhibitors for most indications with better
+      tolerability (no ACE-inhibitor cough). Same monitoring requirements for
+      potassium and creatinine. Often co-prescribed with hydrochlorothiazide
+      as a fixed-dose combination.
+    synthea_distribution_file: "ace_arb_ingredient_distribution.csv"
+    ingredient_concepts:
+      - rxnorm: "73494"
+        name: "losartan"
+        product_file: "ace_arb_losartan_product_distribution.csv"
+      - rxnorm: "69749"
+        name: "valsartan"
+        product_file: "ace_arb_valsartan_product_distribution.csv"
+      - rxnorm: "83515"
+        name: "irbesartan"
+        product_file: "ace_arb_irbesartan_product_distribution.csv"
+      - rxnorm: "73478"
+        name: "telmisartan"
+        product_file: "ace_arb_telmisartan_product_distribution.csv"
+      - rxnorm: "321064"
+        name: "sacubitril/valsartan"
+        product_file: "ace_arb_sacubitril_valsartan_product_distribution.csv"
+        feature_notes: >
+          Sacubitril/valsartan (Entresto) indicates CHF + HTN — highest
+          complexity subgroup. Flag separately as indicator of chf_regimen.
+
+  calcium_channel_blockers:
+    description: "Calcium channel blockers — first-line antihypertensives"
+    clinical_rationale: >
+      CCBs (particularly amlodipine) are first-line for HTN without compelling
+      indications for other classes. Lower monitoring burden than ACE-I/ARB —
+      no required labs. Often prescribed as combination with ACE-I (e.g.
+      amlodipine/benazepril) in fixed-dose products, which reduces pill burden.
+    ingredient_concepts:
+      - rxnorm: "17767"
+        name: "amlodipine"
+        product_file: "ace_arb_amlodipine_benazepril_product_distribution.csv"
+        feature_notes: >
+          Most commonly prescribed CCB. Combination product file covers
+          amlodipine/benazepril. Check medications.csv for amlodipine
+          monotherapy vs combination separately.
+
+  thiazide_diuretics:
+    description: "Thiazide diuretics — first-line antihypertensives and common add-on"
+    clinical_rationale: >
+      Hydrochlorothiazide (HCTZ) is the most commonly prescribed antihypertensive
+      add-on in the US. Frequently combined with ACE-I or ARB as a fixed-dose
+      product. Thiazides require annual electrolyte monitoring (sodium, potassium)
+      and can worsen glucose tolerance in prediabetic patients — clinically
+      relevant interaction with the high prediabetes prevalence (38.5%) in this
+      cohort.
+    ingredient_concepts:
+      - rxnorm: "5487"
+        name: "hydrochlorothiazide"
+        product_files:
+          - "ace_arb_hydrochlorothiazide_lisinopril_product_distribution.csv"
+          - "ace_arb_hydrochlorothiazide_losartan_product_distribution.csv"
+          - "ace_arb_hydrochlorothiazide_valsartan_product_distribution.csv"
+          - "ace_arb_benazepril_hydrochlorothiazide_product_distribution.csv"
+        feature_notes: >
+          HCTZ appears primarily as a combination product in Synthea. Check
+          medications.csv for both monotherapy RxNorm codes and combination
+          product codes. Each distribution file above corresponds to a distinct
+          fixed-dose combination.
+
+  beta_blockers:
+    description: "Beta-blockers — second-line antihypertensives and CHF/post-MI agents"
+    clinical_rationale: >
+      Beta-blockers are second-line for uncomplicated HTN but first-line for
+      HTN with CHF, post-MI, or atrial fibrillation. Their presence in a
+      patient's medication list is therefore a comorbidity severity signal —
+      a patient on a beta-blocker for HTN likely has one of these additional
+      indications, elevating their overall regimen complexity and gap risk.
+    synthea_distribution_file: "beta_blocker_ingredient_distribution.csv"
+    ingredient_concepts:
+      - rxnorm: "6918"
+        name: "metoprolol"
+        product_file: "beta_blocker_metoprolol_product_distribution.csv"
+      - rxnorm: "19484"
+        name: "atenolol"
+        product_file: "beta_blocker_atenolol_product_distribution.csv"
+      - rxnorm: "20352"
+        name: "carvedilol"
+        product_file: "beta_blocker_carvedilol_product_distribution.csv"
+        feature_notes: >
+          Carvedilol indicates CHF + HTN. Strong regimen-complexity signal.
+          Routes to pharmacist via SHAP.
+      - rxnorm: "33306"
+        name: "bisoprolol"
+        product_file: "beta_blocker_bisoprolol_product_distribution.csv"
+      - rxnorm: "52175"
+        name: "nebivolol"
+        product_file: "beta_blocker_nebivolol_product_distribution.csv"
+      - rxnorm: "7801"
+        name: "propranolol"
+        product_file: "beta_blocker_propranolol_product_distribution.csv"
+      - rxnorm: "6984"
+        name: "labetalol"
+        product_file: "beta_blocker_labetalol_product_distribution.csv"
+
+
+# =============================================================================
+# COMPOSITE FLAGS
+# Pre-defined combinations used in sdoh.py and features/trajectories.py.
+# These are the binary columns that land in feature_panel.parquet.
+# Each flag is 1 if ANY of the listed SNOMED codes is present for that patient.
+# =============================================================================
+
+composite_flags:
+
+  # Cohort definition
+  htn_treated:
+    description: "Treated hypertensive cohort entry flag"
+    logic: "SNOMED 59621000 AND >= 1 antihypertensive RxNorm fill in medications.csv"
+    note: "This is a filter, not a feature. Computed in etl/cohort.py."
+
+  # Clinical composites
+  mi_any:
+    description: "Any myocardial infarction (history or active)"
+    codes: ["399211009", "22298006", "401314000", "401303003"]
+
+  chf_any:
+    description: "Any congestive heart failure diagnosis"
+    codes: ["88805009", "84114007"]
+
+  obesity_any:
+    description: "Any obesity classification"
+    codes: ["162864005", "408512008"]
+
+  obesity_severe:
+    description: "Severe obesity (BMI 40+)"
+    codes: ["408512008"]
+
+  ckd_any:
+    description: "Any chronic kidney disease stage 1–4 or diabetic nephropathy"
+    codes: ["431855005", "431856006", "433144002", "431857002", "127013003"]
+
+  ckd_stage:
+    description: "Ordinal CKD stage (1–4); 0 if none present"
+    logic: "MAX of encoded stage values: stage1=1, stage2=2, stage3=3, stage4=4"
+    codes:
+      "1": "431855005"
+      "2": "431856006"
+      "3": "433144002"
+      "4": "431857002"
+
+  # SDOH composites (routing-ready)
+  sdoh_isolation_any:
+    description: "Social isolation or limited social contact"
+    routing_action: "bilingual_chw_call"
+    codes: ["422650009", "423315002"]
+
+  sdoh_financial_barrier:
+    description: "Financial access barrier (unemployed or not in labor force)"
+    routing_action: "social_worker"
+    codes: ["73438004", "741062008"]
+
+  sdoh_housing_barrier:
+    description: "Housing instability or homelessness"
+    routing_action: "social_worker"
+    codes: ["105531004", "32911000"]
+
+  sdoh_transport_barrier:
+    description: "Transportation access barrier"
+    routing_action: "transport_voucher_or_mail_order_rx"
+    codes: ["713458007", "266934004"]
+
+  sdoh_low_education:
+    description: "Low education level (primary or high school only)"
+    routing_action: "bilingual_chw_call_with_simplified_instructions"
+    codes: ["224295006", "473461003"]
+
+  migrant_any:
+    description: "Refugee or social migrant status"
+    routing_action: "bilingual_chw_call + social_worker co-dispatch"
+    codes: ["446654005", "160701002"]
+
+  trauma_exposure:
+    description: "Trauma exposure composite (IPV or environmental violence)"
+    routing_action: "safety_screened_chw_call"
+    codes: ["706893006", "424393004"]
+
+
+# =============================================================================
+# VALIDATION MANIFEST
+# All SNOMED codes below were cross-referenced against the SyntheticRI
+# conditions_300K sheet on 2026-06-28. Patient counts and prevalence
+# percentages match the datasheet exactly. Zero discrepancies found.
+# =============================================================================
+
+validation:
+  run_date: "2026-06-28"
+  validator: "cross_reference_script"
+  source: "SyntheticRI conditions_300K sheet (N_total = 348120)"
+  codes_checked: 47
+  codes_confirmed: 47
+  codes_failed: 0
+  status: "ALL_CONFIRMED"
+  note: >
+    Re-run validation against the actual conditions.csv from the 300K Globus
+    transfer before Phase B freeze. The datasheet is a summary — the live CSV
+    is the authoritative source. Prevalence should match within ±0.1%.
