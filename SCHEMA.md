@@ -77,3 +77,24 @@ Cohort size: **1,124 patients**, 2,344,790 rows across 18 tables.
 
 ## "Cohort validation (Jun 30): 0 patients have HTN diagnosis without an antihypertensive fill; 103 patients have a fill without the HTN diagnosis code (likely off-label use of BP meds for other conditions, or a Synthea documentation quirk). The treated-hypertensive AND-filter is working correctly — this population's diagnosis and treatment are essentially coincident."
 
+## Cohort validation (Andres, 2026-06-30)
+
+Ran cohort.py on the 1K dataset. Results:
+- HTN-diagnosed patients: 262
+- Antihypertensive-fill patients: 365
+- Treated-hypertensive cohort (intersection): 262
+
+Note: every HTN-diagnosed patient also has an antihypertensive fill — 0
+diagnosed-untreated patients on this dataset. 103 patients have a fill
+but no HTN diagnosis code (likely off-label use of BP meds for other
+conditions, e.g. beta-blockers for arrhythmia, or a Synthea quirk).
+
+This is expected behavior on this dataset, not a bug in the cohort
+logic. The AND-filter (diagnosis AND treatment) is working correctly —
+this particular synthetic population happens to have 100% treatment-
+on-diagnosis. Worth flagging in the pitch as a synthetic-data property,
+not a real-RI finding.
+
+Cohort snapshot: data/snapshots/cohort_patients.parquet (gitignored,
+regenerate with `./venv/bin/python src/etl/cohort.py`)
+
