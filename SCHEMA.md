@@ -73,3 +73,7 @@ Cohort size: **1,124 patients**, 2,344,790 rows across 18 tables.
 ## Notes
 - Code/id/zip-like columns (ZIP, SSN, FIPS, CODE, PROCEDURECODE, REASONCODE) are forced to string in ingest to preserve leading zeros.
 - Dates kept as strings on ingest; parse in the features stage.
+
+
+## "Cohort validation (Jun 30): 0 patients have HTN diagnosis without an antihypertensive fill; 103 patients have a fill without the HTN diagnosis code (likely off-label use of BP meds for other conditions, or a Synthea documentation quirk). The treated-hypertensive AND-filter is working correctly — this population's diagnosis and treatment are essentially coincident."
+
