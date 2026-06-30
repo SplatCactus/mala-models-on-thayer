@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BP Cascade RI — CHW worklist</title>
+<style>
+  :root {
+    --bg: #f7f6f3;
+    --card: #ffffff;
+    --border: #e2e0da;
+    --text-primary: #1f1e1c;
+    --text-secondary: #6b6a64;
+    --text-muted: #9a9890;
+    --radius: 10px;
+    --pharmacist: #534ab7;
+    --pharmacist-bg: #eeedfe;
+    --pharmacist-text: #3c3489;
+    --social: #d85a30;
+    --social-bg: #faece7;
+    --social-text: #712b13;
+    --chw: #1d9e75;
+    --chw-bg: #e1f5ee;
+    --chw-text: #085041;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text-primary);
+    padding: 2rem 1.5rem;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
+  .subtitle { font-size: 13px; color: var(--text-secondary); margin: 0; }
+  .controls { display: flex; gap: 8px; align-items: center; }
+  .lang-toggle {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .lang-toggle button {
+    border: none;
+    background: var(--card);
+    padding: 6px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    color: var(--text-secondary);
+  }
+  .lang-toggle button.active {
+    background: var(--text-primary);
+    color: white;
+  }
+  .meta-bar {
+    display: flex;
+    gap: 16px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+  .meta-bar b { color: var(--text-primary); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--card);
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--border);
+    font-size: 14px;
+  }
+  th, td {
+    text-align: left;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+  }
+  th:hover { color: var(--text-primary); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #fafaf8; }
+  .patient-name { font-weight: 600; }
+  .lang-badge {
+    display: inline-block;
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--text-secondary);
+    margin-left: 6px;
+    font-weight: 500;
+  }
+  .break-window { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .risk-bar-wrap {
+    width: 60px;
+    height: 5px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 4px;
+  }
+  .risk-bar-fill { height: 100%; background: var(--text-primary); }
+  .driver-label { font-size: 13px; }
+  .action-pill {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .action-pharmacist { background: var(--pharmacist-bg); color: var(--pharmacist-text); }
+  .action-social_worker { background: var(--social-bg); color: var(--social-text); }
+  .action-chw_call { background: var(--chw-bg); color: var(--chw-text); }
+  .expand-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 12px;
+    padding: 4px 10px;
+    cursor: pointer;
+    color: var(--text-secondary);
+  }
+  .expand-btn:hover { background: var(--bg); }
+  .script-row td {
+    background: #fafaf8;
+    padding: 14px 18px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border);
+  }
+  .script-row.hidden { display: none; }
+  .script-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin-bottom: 4px; font-weight: 600; }
+  .status-line { font-size: 13px; color: var(--text-muted); padding: 2rem 0; text-align: center; }
+  .legend { display: flex; gap: 16px; margin-top: 1rem; font-size: 12px; color: var(--text-secondary); flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <h1 id="title">CHW worklist</h1>
+      <p class="subtitle" id="subtitle">Patients at risk of a medication persistence break, ranked by urgency</p>
+    </div>
+    <div class="controls">
+      <div class="lang-toggle">
+        <button id="btn-en" class="active" onclick="setLang('en')">EN</button>
+        <button id="btn-es" onclick="setLang('es')">ES</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="meta-bar" id="meta-bar"></div>
+
+  <div id="content">
+    <p class="status-line">Loading worklist…</p>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><span class="legend-dot" style="background:var(--pharmacist)"></span><span id="legend-pharmacist">Pharmacist</span></div>
+    <div class="legend-item"><span class="legend-dot" style="background:var(--social)"></span><span id="legend-social">Social worker</span></div>
+    <div class="legend-item"><span class="legend-dot" style="background:var(--chw)"></span><span id="legend-chw">CHW call</span></div>
+  </div>
+
+</div>
+
+<script>
+const API_BASE = "http://localhost:8000";
+
+const STRINGS = {
+  en: {
+    title: "CHW worklist",
+    subtitle: "Patients at risk of a medication persistence break, ranked by urgency",
+    cohort: "Cohort",
+    capacity: "Capacity",
+    showing: "Showing",
+    patients: "patients",
+    colPatient: "Patient",
+    colBreakWindow: "Predicted break window",
+    colRisk: "Risk",
+    colDriver: "Top driver",
+    colAction: "Routed to",
+    colScript: "Script",
+    viewScript: "View script",
+    hideScript: "Hide",
+    outreachScript: "Outreach script",
+    pharmacist: "Pharmacist",
+    socialWorker: "Social worker",
+    chwCall: "CHW call",
+    loading: "Loading worklist…",
+    error: "Couldn't reach the API. Is uvicorn running on port 8000?",
+    legendPharmacist: "Pharmacist",
+    legendSocial: "Social worker",
+    legendChw: "CHW call"
+  },
+  es: {
+    title: "Lista de trabajo CHW",
+    subtitle: "Pacientes en riesgo de interrumpir su medicamento, ordenados por urgencia",
+    cohort: "Cohorte",
+    capacity: "Capacidad",
+    showing: "Mostrando",
+    patients: "pacientes",
+    colPatient: "Paciente",
+    colBreakWindow: "Ventana prevista de interrupción",
+    colRisk: "Riesgo",
+    colDriver: "Factor principal",
+    colAction: "Enviado a",
+    colScript: "Guion",
+    viewScript: "Ver guion",
+    hideScript: "Ocultar",
+    outreachScript: "Guion de contacto",
+    pharmacist: "Farmacéutico",
+    socialWorker: "Trabajador social",
+    chwCall: "Llamada de CHW",
+    loading: "Cargando lista…",
+    error: "No se pudo conectar con la API. ¿Está uvicorn corriendo en el puerto 8000?",
+    legendPharmacist: "Farmacéutico",
+    legendSocial: "Trabajador social",
+    legendChw: "Llamada de CHW"
+  }
+};
+
+let currentLang = "en";
+let worklistData = null;
+let sortKey = "break_window_start";
+let sortAsc = true;
+let expandedId = null;
+
+function setLang(lang) {
+  currentLang = lang;
+  document.getElementById("btn-en").classList.toggle("active", lang === "en");
+  document.getElementById("btn-es").classList.toggle("active", lang === "es");
+  render();
+}
+
+function actionLabel(action) {
+  const s = STRINGS[currentLang];
+  if (action === "pharmacist") return s.pharmacist;
+  if (action === "social_worker") return s.socialWorker;
+  if (action === "chw_call") return s.chwCall;
+  return action;
+}
+
+function formatDateRange(start, end) {
+  const opts = { month: "short", day: "numeric" };
+  const locale = currentLang === "es" ? "es-ES" : "en-US";
+  const startDate = new Date(start + "T00:00:00");
+  const endDate = new Date(end + "T00:00:00");
+  return `${startDate.toLocaleDateString(locale, opts)} – ${endDate.toLocaleDateString(locale, opts)}`;
+}
+
+function sortBy(key) {
+  if (sortKey === key) {
+    sortAsc = !sortAsc;
+  } else {
+    sortKey = key;
+    sortAsc = true;
+  }
+  render();
+}
+
+function toggleScript(patientId) {
+  expandedId = expandedId === patientId ? null : patientId;
+  render();
+}
+
+async function loadWorklist() {
+  try {
+    const res = await fetch(`${API_BASE}/worklist`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    worklistData = await res.json();
+    render();
+  } catch (err) {
+    const s = STRINGS[currentLang];
+    document.getElementById("content").innerHTML =
+      `<p class="status-line">${s.error}<br><span style="font-size:11px">${err.message}</span></p>`;
+  }
+}
+
+function render() {
+  const s = STRINGS[currentLang];
+  document.getElementById("title").textContent = s.title;
+  document.getElementById("subtitle").textContent = s.subtitle;
+  document.getElementById("legend-pharmacist").textContent = s.legendPharmacist;
+  document.getElementById("legend-social").textContent = s.legendSocial;
+  document.getElementById("legend-chw").textContent = s.legendChw;
+
+  if (!worklistData) return;
+
+  document.getElementById("meta-bar").innerHTML = `
+    <span>${s.cohort}: <b>${worklistData.cohort_size}</b></span>
+    <span>${s.capacity}: <b>${worklistData.capacity}</b></span>
+    <span>${s.showing} <b>${worklistData.worklist.length}</b> ${s.patients}</span>
+  `;
+
+  const sorted = [...worklistData.worklist].sort((a, b) => {
+    let av = a[sortKey], bv = b[sortKey];
+    if (typeof av === "string") av = av.toLowerCase();
+    if (typeof bv === "string") bv = bv.toLowerCase();
+    if (av < bv) return sortAsc ? -1 : 1;
+    if (av > bv) return sortAsc ? 1 : -1;
+    return 0;
+  });
+
+  const rows = sorted.map(p => {
+    const driverLabel = currentLang === "es" ? p.driver_label_es : p.driver_label_en;
+    const script = currentLang === "es" ? p.outreach_script_es : p.outreach_script_en;
+    const isExpanded = expandedId === p.patient_id;
+    const langBadge = p.preferred_language === "es" ? "ES" : "EN";
+
+    return `
+      <tr>
+        <td>
+          <span class="patient-name">${p.display_name}</span>
+          <span class="lang-badge">${langBadge}</span>
+        </td>
+        <td class="break-window">${formatDateRange(p.break_window_start, p.break_window_end)}</td>
+        <td>
+          ${Math.round(p.risk_score * 100)}%
+          <div class="risk-bar-wrap"><div class="risk-bar-fill" style="width:${Math.round(p.risk_score * 100)}%"></div></div>
+        </td>
+        <td class="driver-label">${driverLabel}</td>
+        <td><span class="action-pill action-${p.routed_action}">${actionLabel(p.routed_action)}</span></td>
+        <td><button class="expand-btn" onclick="toggleScript('${p.patient_id}')">${isExpanded ? s.hideScript : s.viewScript}</button></td>
+      </tr>
+      <tr class="script-row ${isExpanded ? "" : "hidden"}">
+        <td colspan="6">
+          <div class="script-label">${s.outreachScript}</div>
+          ${script}
+        </td>
+      </tr>
+    `;
+  }).join("");
+
+  document.getElementById("content").innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th onclick="sortBy('display_name')">${s.colPatient}</th>
+          <th onclick="sortBy('break_window_start')">${s.colBreakWindow}</th>
+          <th onclick="sortBy('risk_score')">${s.colRisk}</th>
+          <th>${s.colDriver}</th>
+          <th>${s.colAction}</th>
+          <th>${s.colScript}</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+loadWorklist();
+</script>
+</body>
+</html>
