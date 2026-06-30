@@ -22,6 +22,8 @@
     --chw: #1d9e75;
     --chw-bg: #e1f5ee;
     --chw-text: #085041;
+    --sms: #4a6cf7;
+    --sms-bg: #eef1ff;
   }
   * { box-sizing: border-box; }
   body {
@@ -154,6 +156,16 @@
   .legend { display: flex; gap: 16px; margin-top: 1rem; font-size: 12px; color: var(--text-secondary); flex-wrap: wrap; }
   .legend-item { display: flex; align-items: center; gap: 6px; }
   .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .sms-nudge {
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: var(--sms-bg);
+    border-left: 3px solid var(--sms);
+    border-radius: 4px;
+    font-size: 13px;
+    color: var(--text-primary);
+  }
+  .sms-nudge .sms-icon { margin-right: 4px; }
 </style>
 </head>
 <body>
@@ -213,7 +225,11 @@ const STRINGS = {
     error: "Couldn't reach the API. Is uvicorn running on port 8000?",
     legendPharmacist: "Pharmacist",
     legendSocial: "Social worker",
-    legendChw: "CHW call"
+    legendChw: "CHW call",
+    smsLabel: "SMS nudge scheduled",
+    smsLangEn: "English",
+    smsLangEs: "Spanish",
+    smsDetail: (lang, date) => `sending in ${lang} on ${date} — mocked, not actually sent`
   },
   es: {
     title: "Lista de trabajo CHW",
@@ -238,7 +254,11 @@ const STRINGS = {
     error: "No se pudo conectar con la API. ¿Está uvicorn corriendo en el puerto 8000?",
     legendPharmacist: "Farmacéutico",
     legendSocial: "Trabajador social",
-    legendChw: "Llamada de CHW"
+    legendChw: "Llamada de CHW",
+    smsLabel: "Recordatorio SMS programado",
+    smsLangEn: "inglés",
+    smsLangEs: "español",
+    smsDetail: (lang, date) => `se enviará en ${lang} el ${date} — simulado, no se envía realmente`
   }
 };
 
@@ -269,6 +289,23 @@ function formatDateRange(start, end) {
   const startDate = new Date(start + "T00:00:00");
   const endDate = new Date(end + "T00:00:00");
   return `${startDate.toLocaleDateString(locale, opts)} – ${endDate.toLocaleDateString(locale, opts)}`;
+}
+
+function formatSingleDate(dateStr) {
+  const opts = { month: "short", day: "numeric" };
+  const locale = currentLang === "es" ? "es-ES" : "en-US";
+  const d = new Date(dateStr + "T00:00:00");
+  return d.toLocaleDateString(locale, opts);
+}
+
+function buildSmsLine(p) {
+  const s = STRINGS[currentLang];
+  // Mocked: nudge fires at the start of the predicted break window, in the
+  // patient's preferred language. No real SMS is sent — this is a UI stub
+  // for the "last-mile" story until a real provider is wired in.
+  const langName = p.preferred_language === "es" ? s.smsLangEs : s.smsLangEn;
+  const date = formatSingleDate(p.break_window_start);
+  return s.smsDetail(langName, date);
 }
 
 function sortBy(key) {
@@ -349,6 +386,9 @@ function render() {
         <td colspan="6">
           <div class="script-label">${s.outreachScript}</div>
           ${script}
+          <div class="sms-nudge">
+            <span class="sms-icon">📱</span><strong>${s.smsLabel}</strong> — ${buildSmsLine(p)}
+          </div>
         </td>
       </tr>
     `;
