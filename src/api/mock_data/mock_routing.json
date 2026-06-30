@@ -1,0 +1,63 @@
+{
+  "generated_at": "2026-06-30T00:00:00Z",
+  "cohort_size": 262,
+  "capacity": 8,
+  "worklist": [
+    {
+      "patient_id": "mock-001",
+      "display_name": "R. Alvarez",
+      "preferred_language": "es",
+      "break_window_start": "2026-07-08",
+      "break_window_end": "2026-07-14",
+      "risk_score": 0.87,
+      "top_driver": "regimen_complexity",
+      "driver_label_en": "Recent dosing change",
+      "driver_label_es": "Cambio reciente de dosis",
+      "routed_action": "pharmacist",
+      "outreach_script_en": "Hi, this is a check-in about your blood pressure medication. We noticed a recent change to your prescription and want to make sure everything is going smoothly. Do you have any questions about your new dose?",
+      "outreach_script_es": "Hola, le llamamos para preguntar sobre su medicamento para la presion. Notamos un cambio reciente en su receta y queremos asegurarnos de que todo vaya bien. ¿Tiene alguna pregunta sobre la nueva dosis?"
+    },
+    {
+      "patient_id": "mock-002",
+      "display_name": "M. Santos",
+      "preferred_language": "es",
+      "break_window_start": "2026-07-05",
+      "break_window_end": "2026-07-11",
+      "risk_score": 0.81,
+      "top_driver": "transportation",
+      "driver_label_en": "Transportation barrier",
+      "driver_label_es": "Barrera de transporte",
+      "routed_action": "social_worker",
+      "outreach_script_en": "Hi, we'd like to help make sure you can get to the pharmacy to pick up your prescription. We may be able to arrange transportation support. Can we talk about your options?",
+      "outreach_script_es": "Hola, queremos ayudarle a llegar a la farmacia para recoger su receta. Es posible que podamos ofrecer apoyo de transporte. ¿Podemos hablar sobre sus opciones?"
+    },
+    {
+      "patient_id": "mock-003",
+      "display_name": "J. Pereira",
+      "preferred_language": "en",
+      "break_window_start": "2026-07-10",
+      "break_window_end": "2026-07-17",
+      "risk_score": 0.74,
+      "top_driver": "visit_gap",
+      "driver_label_en": "Engagement gap",
+      "driver_label_es": "Brecha de seguimiento",
+      "routed_action": "chw_call",
+      "outreach_script_en": "Hi, it's been a little while since your last visit. We wanted to check in and see how you're doing with your medication, and if there's anything we can help with.",
+      "outreach_script_es": "Hola, ha pasado un tiempo desde su ultima visita. Queriamos saber como esta con su medicamento y si hay algo en lo que podamos ayudar."
+    },
+    {
+      "patient_id": "mock-004",
+      "display_name": "L. Fonseca",
+      "preferred_language": "en",
+      "break_window_start": "2026-07-03",
+      "break_window_end": "2026-07-09",
+      "risk_score": 0.79,
+      "top_driver": "housing",
+      "driver_label_en": "Housing instability",
+      "driver_label_es": "Inestabilidad de vivienda",
+      "routed_action": "social_worker",
+      "outreach_script_en": "Hi, we want to make sure you have everything you need to keep up with your blood pressure medication, including a safe place to store it. Can we connect you with some additional support?",
+      "outreach_script_es": "Hola, queremos asegurarnos de que tenga todo lo necesario para continuar con su medicamento, incluido un lugar seguro para guardarlo. ¿Podemos conectarle con apoyo adicional?"
+    }
+  ]
+}
