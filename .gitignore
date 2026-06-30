@@ -1,0 +1,19 @@
+# Data — never commit, even small samples
+data/
+*.csv
+*.parquet
+
+# Python environment
+venv/
+__pycache__/
+*.pyc
+.env
+
+# OS/editor cruft
+.DS_Store
+.vscode/settings.json
+
+# Model artifacts (can be large, frozen snapshots go to shared drive, not git)
+*.pkl
+*.joblib
+models/*.bin
