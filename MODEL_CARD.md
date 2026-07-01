@@ -1,6 +1,6 @@
 # Model Card — BP Cascade RI Persistence-Risk Model
 
-Last updated: 2026-07-01
+Last updated: 2026-07-01 (baseline results added after first training run on the 1K cohort)
 
 ## What this model does
 
@@ -41,12 +41,48 @@ the appropriate CHW/pharmacist/social-worker intervention (see
   `pdc.py` (a pre-index fill must not count toward the forward coverage
   window). **All 10 passing.**
 
+## Results — baseline trained on the 1K cohort
+
+Temporal split (by `index_date`, via `splits.py`): **183 train / 39 val / 40
+test**. Event rate (`has_30_day_gap`) varies sharply by split just from
+sample size: **50/183 (27.3%) train, 1/39 (2.6%) val, 6/40 (15.0%) test**.
+
+Held-out **test** set:
+
+- **Concordance index: 0.391**
+- **Time-dependent AUC: 0.401 @ day 38, 0.457 @ day 60 (mean 0.435)**
+
+**Read this as "not distinguishable from chance," not as "the model is
+anti-predictive."** Both are below 0.5, but the test set has only 6 observed
+events (val has 1) — at that sample size a C-index this far from 0.5 is well
+within pure sampling noise. This result reflects two compounding constraints,
+neither of which this baseline could have modeled around:
+
+1. **Sample size.** 262 patients total, temporally split, leaves single-digit
+   event counts in val/test. No amount of model tuning fixes that.
+2. **BP-feature sparsity, independent of the index_date fix.** Fixing
+   `index_date` to filter to antihypertensive fills specifically (see
+   limitation #1 below) corrected clinically-impossible dates but did not
+   meaningfully improve BP-trajectory coverage: `sbp_mean`/`dbp_mean` are
+   non-null for only 12/262 patients (4.6%), and `sbp_trajectory_slope`/
+   `dbp_trajectory_slope` for only 3/262 (1.1%) — both **before and after**
+   the fix (13/262 and 0/262, respectively, on the old buggy data). The
+   model is effectively learning off SDOH flags and age alone.
+
+**This is not a verdict on the tree-based survival modeling approach** —
+it's a verdict on what 262 patients with ~95%-missing vitals can support.
+The next useful lever is more data (the 300K-patient SyntheticRI set
+`code_dictionary.yaml` already references), not further tuning of this
+baseline.
+
 ## Known limitations (read before trusting model output)
 
-1. **`index_date` is a placeholder.** `build_features.py` currently derives
-   it as each patient's first medication fill (a TEMP hack, not a real
-   clinical index date). Splits/model treat it as an injected parameter, so
-   swapping in a real index date requires no changes here.
+1. **`index_date` derivation is fixed but still a placeholder.**
+   `build_features.py` now correctly filters to each patient's first
+   *antihypertensive* fill (not first fill of any medication — that bug is
+   fixed), but it's still a TEMP stand-in for a real clinical index date
+   (e.g. an HTN diagnosis date). Splits/model treat it as an injected
+   parameter, so swapping in a real index date requires no changes here.
 2. **Survival duration is a proxy, not a true event time.** `pdc.py` only
    reports *whether* a gap occurred in the 180-day window, not the day it
    started. `build_survival_labels` (in `survival.py`) approximates duration
@@ -68,10 +104,13 @@ the appropriate CHW/pharmacist/social-worker intervention (see
 
 ## Evaluation
 
-Harrell's concordance index only. Integrated Brier score is intentionally
-omitted — it needs an absolute timescale to calibrate against, and the
-duration proxy above isn't trustworthy enough for that yet (concordance is
-a ranking metric, more robust to the proxy).
+Harrell's concordance index (`evaluate_survival_model`) and cumulative/
+dynamic time-dependent AUC (`evaluate_time_dependent_auc`, added after the
+first baseline run). Integrated Brier score is intentionally omitted — it
+needs an absolute timescale to calibrate against, and the duration proxy
+above isn't trustworthy enough for that yet (both concordance and
+time-dependent AUC are ranking metrics, more robust to the proxy than a
+calibration metric would be).
 
 ## Edge cases handled (see `survival.py`/`splits.py`)
 
