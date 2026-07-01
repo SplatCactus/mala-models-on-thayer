@@ -31,7 +31,7 @@ import yaml
 # Make the sibling feature modules importable regardless of CWD (`from pdc import ...`).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from pdc import calculate_pdc_outcome  # noqa: E402
+from pdc import calculate_pdc_outcome, ANTIHYPERTENSIVE_RXNORM_PRODUCT_LEVEL  # noqa: E402
 from trajectories import compute_bp_trajectory  # noqa: E402
 from sdoh import compute_sdoh_flags  # noqa: E402
 
@@ -98,13 +98,14 @@ def main() -> int:
     cohort = _normalize_cohort(_read_parquet(COHORT_PATH, "cohort"))
     meds = _read_parquet(MEDS_PATH, "medications")
 
-    # TEMP: cohort has no index_date — derive it as each patient's very first medication
-    # fill date (min START in medications.parquet). ISO-8601 strings sort chronologically,
-    # so a string min is correct and avoids parsing the whole table here.
+    # TEMP: cohort has no index_date — derive it as each patient's first ANTIHYPERTENSIVE
+    # fill date (min START among antihypertensive fills). ISO-8601 strings sort
+    # chronologically, so a string min is correct and avoids parsing the whole table here.
     if INDEX_DATE_COL not in cohort.columns:
-        log.info("  deriving %s = first medication fill per patient", INDEX_DATE_COL)
+        log.info("  deriving %s = first antihypertensive fill per patient", INDEX_DATE_COL)
+        ah = meds[meds["CODE"].astype(str).isin(ANTIHYPERTENSIVE_RXNORM_PRODUCT_LEVEL)]
         first_fill = (
-            meds.groupby("PATIENT", as_index=False)["START"].min()
+            ah.groupby("PATIENT", as_index=False)["START"].min()
             .rename(columns={"PATIENT": PATIENT_ID_COL, "START": INDEX_DATE_COL})
         )
         cohort = cohort.merge(first_fill, on=PATIENT_ID_COL, how="left")
