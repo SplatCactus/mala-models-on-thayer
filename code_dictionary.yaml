@@ -716,22 +716,18 @@ rxnorm:
       potassium and creatinine monitoring, adding lab-dependent steps that
       increase the effective complexity of the regimen beyond pill count alone.
     synthea_distribution_file: "ace_arb_ingredient_distribution.csv"
+    # rxnorm below are the PRODUCT-level codes present in medications.csv (32/32 matched).
     ingredient_concepts:
-      - rxnorm: "29046"
-        name: "lisinopril"
-        product_file: "ace_arb_lisinopril_product_distribution.csv"
-      - rxnorm: "18867"
-        name: "benazepril"
-        product_file: "ace_arb_benazepril_product_distribution.csv"
-      - rxnorm: "3827"
-        name: "enalapril"
-        product_file: "ace_arb_enalapril_product_distribution.csv"
-      - rxnorm: "35208"
-        name: "quinapril"
-        product_file: "ace_arb_quinapril_product_distribution.csv"
-      - rxnorm: "35296"
-        name: "ramipril"
-        product_file: "ace_arb_ramipril_product_distribution.csv"
+      - name: "lisinopril"
+        rxnorm: ["314076", "311353", "314077", "197884", "311354"]
+      - name: "benazepril"
+        rxnorm: []   # not present in medications.csv
+      - name: "enalapril"
+        rxnorm: ["858804", "858810"]
+      - name: "quinapril"
+        rxnorm: []   # not present in medications.csv
+      - name: "ramipril"
+        rxnorm: []   # not present in medications.csv
 
   arbs:
     description: "Angiotensin receptor blockers — first-line antihypertensives"
@@ -741,22 +737,18 @@ rxnorm:
       potassium and creatinine. Often co-prescribed with hydrochlorothiazide
       as a fixed-dose combination.
     synthea_distribution_file: "ace_arb_ingredient_distribution.csv"
+    # rxnorm below are the PRODUCT-level codes present in medications.csv.
     ingredient_concepts:
-      - rxnorm: "73494"
-        name: "losartan"
-        product_file: "ace_arb_losartan_product_distribution.csv"
-      - rxnorm: "69749"
-        name: "valsartan"
-        product_file: "ace_arb_valsartan_product_distribution.csv"
-      - rxnorm: "83515"
-        name: "irbesartan"
-        product_file: "ace_arb_irbesartan_product_distribution.csv"
-      - rxnorm: "73478"
-        name: "telmisartan"
-        product_file: "ace_arb_telmisartan_product_distribution.csv"
-      - rxnorm: "321064"
-        name: "sacubitril/valsartan"
-        product_file: "ace_arb_sacubitril_valsartan_product_distribution.csv"
+      - name: "losartan"
+        rxnorm: ["979480", "979485", "979492"]
+      - name: "valsartan"
+        rxnorm: ["349200"]
+      - name: "irbesartan"
+        rxnorm: []   # not present in medications.csv
+      - name: "telmisartan"
+        rxnorm: []   # not present in medications.csv
+      - name: "sacubitril/valsartan"
+        rxnorm: ["1656356"]
         feature_notes: >
           Sacubitril/valsartan (Entresto) indicates CHF + HTN — highest
           complexity subgroup. Flag separately as indicator of chf_regimen.
@@ -768,14 +760,15 @@ rxnorm:
       indications for other classes. Lower monitoring burden than ACE-I/ARB —
       no required labs. Often prescribed as combination with ACE-I (e.g.
       amlodipine/benazepril) in fixed-dose products, which reduces pill burden.
+    # rxnorm below are the PRODUCT-level codes present in medications.csv.
     ingredient_concepts:
-      - rxnorm: "17767"
-        name: "amlodipine"
-        product_file: "ace_arb_amlodipine_benazepril_product_distribution.csv"
+      - name: "amlodipine"
+        rxnorm: ["308136"]
         feature_notes: >
-          Most commonly prescribed CCB. Combination product file covers
-          amlodipine/benazepril. Check medications.csv for amlodipine
+          Most commonly prescribed CCB. Check medications.csv for amlodipine
           monotherapy vs combination separately.
+      - name: "verapamil"
+        rxnorm: ["897685"]
 
   thiazide_diuretics:
     description: "Thiazide diuretics — first-line antihypertensives and common add-on"
@@ -786,14 +779,11 @@ rxnorm:
       and can worsen glucose tolerance in prediabetic patients — clinically
       relevant interaction with the high prediabetes prevalence (38.5%) in this
       cohort.
+    # rxnorm below are the PRODUCT-level codes present in medications.csv
+    # (310798 = HCTZ mono; the rest are fixed-dose combination products).
     ingredient_concepts:
-      - rxnorm: "5487"
-        name: "hydrochlorothiazide"
-        product_files:
-          - "ace_arb_hydrochlorothiazide_lisinopril_product_distribution.csv"
-          - "ace_arb_hydrochlorothiazide_losartan_product_distribution.csv"
-          - "ace_arb_hydrochlorothiazide_valsartan_product_distribution.csv"
-          - "ace_arb_benazepril_hydrochlorothiazide_product_distribution.csv"
+      - name: "hydrochlorothiazide"
+        rxnorm: ["310798", "197887", "979471", "200285", "999970"]
         feature_notes: >
           HCTZ appears primarily as a combination product in Synthea. Check
           medications.csv for both monotherapy RxNorm codes and combination
@@ -809,31 +799,25 @@ rxnorm:
       a patient on a beta-blocker for HTN likely has one of these additional
       indications, elevating their overall regimen complexity and gap risk.
     synthea_distribution_file: "beta_blocker_ingredient_distribution.csv"
+    # rxnorm below are the PRODUCT-level codes present in medications.csv.
     ingredient_concepts:
-      - rxnorm: "6918"
-        name: "metoprolol"
-        product_file: "beta_blocker_metoprolol_product_distribution.csv"
-      - rxnorm: "19484"
-        name: "atenolol"
-        product_file: "beta_blocker_atenolol_product_distribution.csv"
-      - rxnorm: "20352"
-        name: "carvedilol"
-        product_file: "beta_blocker_carvedilol_product_distribution.csv"
+      - name: "metoprolol"
+        rxnorm: ["866412", "866419", "866427", "866429", "866436", "866511", "866924", "866514"]
+      - name: "atenolol"
+        rxnorm: ["197379", "197381"]
+      - name: "carvedilol"
+        rxnorm: ["200032", "200033", "686924"]
         feature_notes: >
           Carvedilol indicates CHF + HTN. Strong regimen-complexity signal.
           Routes to pharmacist via SHAP.
-      - rxnorm: "33306"
-        name: "bisoprolol"
-        product_file: "beta_blocker_bisoprolol_product_distribution.csv"
-      - rxnorm: "52175"
-        name: "nebivolol"
-        product_file: "beta_blocker_nebivolol_product_distribution.csv"
-      - rxnorm: "7801"
-        name: "propranolol"
-        product_file: "beta_blocker_propranolol_product_distribution.csv"
-      - rxnorm: "6984"
-        name: "labetalol"
-        product_file: "beta_blocker_labetalol_product_distribution.csv"
+      - name: "bisoprolol"
+        rxnorm: []   # not present in medications.csv
+      - name: "nebivolol"
+        rxnorm: []   # not present in medications.csv
+      - name: "propranolol"
+        rxnorm: []   # not present in medications.csv
+      - name: "labetalol"
+        rxnorm: []   # not present in medications.csv
 
 
 # =============================================================================
