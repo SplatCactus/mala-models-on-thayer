@@ -3,6 +3,13 @@ data/
 *.csv
 *.parquet
 
+# EXCEPTIONS: small, intentionally-tracked outputs that live at repo root
+# (not inside data/), used as team handoff contracts. Add new exceptions here
+# rather than force-adding (-f) each time — force-adds are silent and easy to
+# forget for the next file.
+!feature_panel.parquet
+!labels.parquet
+
 # Python environment
 venv/
 __pycache__/
