@@ -164,8 +164,10 @@ def compute_bp_trajectory(
         right_on=cohort_patient_col,
         how="inner",
     )
+    lookback = pd.to_timedelta(lookback_days, unit="D")
     in_window = (
-        vit["_date"].dt.normalize() <= vit["_index_date"].dt.normalize()
+        (vit["_date"] >= vit["_index_date"] - lookback)
+        & (vit["_date"] < vit["_index_date"])
     )
     vit = vit[in_window]
 
