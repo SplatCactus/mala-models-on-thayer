@@ -46,6 +46,7 @@ COHORT_PATH = ROOT / "data" / "cohort_patients_1k.parquet"   # must have PATIENT
 MEDS_PATH = PARQUET / "medications.parquet"
 VITALS_PATH = PARQUET / "observations.parquet"               # BP = LOINC subset of observations
 CONDITIONS_PATH = PARQUET / "conditions.parquet"             # SDOH SNOMED source (NOT observations)
+PATIENTS_PATH = PARQUET / "patients.parquet"                 # demographics for selection-bias report
 CODE_DICT_PATH = ROOT / "code_dictionary.yaml"
 
 # Output.
@@ -54,8 +55,15 @@ LABELS_PATH = ROOT / "labels.parquet"          # model target (y): PDC outcome, 
 
 # Column conventions.
 PATIENT_ID_COL = "patient_id"       # cohort key column
-INDEX_DATE_COL = "index_date"       # first-fill index: BP/SDOH pre-index cutoff + PDC forward window
+INDEX_DATE_COL = "index_date"       # incident-fill index: BP/SDOH pre-index cutoff + PDC forward window
 CONDITIONS_DATE_COL = "START"       # conditions.parquet date column
+
+# Incident / new-user cohort design.
+WASHOUT_DAYS = 365          # index_date = first antihypertensive fill with NO prior fill in the preceding WASHOUT_DAYS
+BASELINE_WINDOW_DAYS = 365  # keep only patients with >=1 observation in [index_date - BASELINE_WINDOW_DAYS, index_date]
+REFERENCE_DATE = "2026-07-01"  # "today" for the age calc in the selection-bias report
+HTN_DX_CODE = "59621000"    # SNOMED essential hypertension, for years-since-first-dx
+SYSTOLIC_BP_CODE = "8480-6" # LOINC systolic BP; baseline eligibility requires one of these
 
 logging.basicConfig(
     level=logging.INFO,
@@ -92,31 +100,109 @@ def _normalize_cohort(cohort: pd.DataFrame) -> pd.DataFrame:
     return cohort
 
 
+def _parse_dt(series: pd.Series) -> pd.Series:
+    """ISO strings -> tz-naive Timestamps (NaT on failure)."""
+    return pd.to_datetime(series, errors="coerce", utc=True).dt.tz_convert(None)
+
+
+def _incident_index_date(meds: pd.DataFrame) -> pd.Series:
+    """Incident/new-user index date per patient (Series: PATIENT -> Timestamp).
+
+    index_date = the earliest antihypertensive fill that has NO prior antihypertensive
+    fill within the preceding WASHOUT_DAYS. This is the treatment-initiation point for a
+    genuine new user rather than an arbitrary refill of a long-standing regimen.
+    """
+    ah = meds[meds["CODE"].astype(str).isin(ANTIHYPERTENSIVE_RXNORM_PRODUCT_LEVEL)].copy()
+    ah["_s"] = _parse_dt(ah["START"])
+    ah = ah.dropna(subset=["_s"]).sort_values(["PATIENT", "_s"])
+    prev = ah.groupby("PATIENT")["_s"].shift()
+    gap_days = (ah["_s"] - prev).dt.days
+    incident = ah[prev.isna() | (gap_days > WASHOUT_DAYS)]  # no fill in the prior washout
+    return incident.groupby("PATIENT")["_s"].min()
+
+
+def _baseline_eligible_ids(cohort: pd.DataFrame, observations: pd.DataFrame) -> set:
+    """Patients with >=1 systolic BP reading in [index_date - BASELINE_WINDOW_DAYS, index_date]."""
+    obs = observations[observations["CODE"].astype(str) == SYSTOLIC_BP_CODE][["PATIENT", "DATE"]].copy()
+    obs["_d"] = _parse_dt(obs["DATE"])
+    obs = obs.dropna(subset=["_d"]).merge(
+        cohort[[PATIENT_ID_COL, INDEX_DATE_COL]],
+        left_on="PATIENT", right_on=PATIENT_ID_COL, how="inner",
+    )
+    lo = obs[INDEX_DATE_COL] - pd.to_timedelta(BASELINE_WINDOW_DAYS, unit="D")
+    in_baseline = (obs["_d"] >= lo) & (obs["_d"] <= obs[INDEX_DATE_COL])
+    return set(obs.loc[in_baseline, PATIENT_ID_COL].unique())
+
+
+def _group_profile(sub: pd.DataFrame, conditions: pd.DataFrame, patients: pd.DataFrame) -> dict:
+    """Mean age / comorbidity-count / years-since-first-HTN-dx for a cohort subset."""
+    ids = set(sub[PATIENT_ID_COL])
+    cond = conditions[conditions["PATIENT"].isin(ids)]
+    comorbidities = cond.groupby("PATIENT")["CODE"].nunique().reindex(ids).fillna(0)
+
+    dx = cond[cond["CODE"].astype(str) == HTN_DX_CODE].copy()
+    dx["_s"] = _parse_dt(dx["START"])
+    first_dx = dx.groupby("PATIENT")["_s"].min()
+    idx = sub.set_index(PATIENT_ID_COL)[INDEX_DATE_COL]
+    years_since_dx = ((idx - first_dx).dt.days / 365.25).dropna()
+
+    pts = patients[patients["Id"].isin(ids)]
+    age = (pd.Timestamp(REFERENCE_DATE) - _parse_dt(pts["BIRTHDATE"])).dt.days / 365.25
+
+    return {
+        "n": len(ids),
+        "age": age.mean(),
+        "comorbidities": comorbidities.mean(),
+        "yrs_since_dx": years_since_dx.mean() if len(years_since_dx) else float("nan"),
+    }
+
+
+def _log_selection_bias(included: pd.DataFrame, excluded: pd.DataFrame,
+                        conditions: pd.DataFrame, patients: pd.DataFrame) -> None:
+    inc, exc = (_group_profile(included, conditions, patients),
+                _group_profile(excluded, conditions, patients))
+    log.info("  selection-bias profile (included vs excluded):")
+    log.info("    %-14s %8s %8s", "", "included", "excluded")
+    for k, label in (("n", "n"), ("age", "mean age"),
+                     ("comorbidities", "mean #cond"), ("yrs_since_dx", "yrs since dx")):
+        log.info("    %-14s %8.1f %8.1f", label, inc[k], exc[k])
+
+
 def main() -> int:
     # ----- Load ------------------------------------------------------------
     log.info("Loading data...")
     cohort = _normalize_cohort(_read_parquet(COHORT_PATH, "cohort"))
     meds = _read_parquet(MEDS_PATH, "medications")
-
-    # TEMP: cohort has no index_date — derive it as each patient's first ANTIHYPERTENSIVE
-    # fill date (min START among antihypertensive fills). ISO-8601 strings sort
-    # chronologically, so a string min is correct and avoids parsing the whole table here.
-    if INDEX_DATE_COL not in cohort.columns:
-        log.info("  deriving %s = first antihypertensive fill per patient", INDEX_DATE_COL)
-        ah = meds[meds["CODE"].astype(str).isin(ANTIHYPERTENSIVE_RXNORM_PRODUCT_LEVEL)]
-        first_fill = (
-            ah.groupby("PATIENT", as_index=False)["START"].min()
-            .rename(columns={"PATIENT": PATIENT_ID_COL, "START": INDEX_DATE_COL})
-        )
-        cohort = cohort.merge(first_fill, on=PATIENT_ID_COL, how="left")
-        n_missing = cohort[INDEX_DATE_COL].isna().sum()
-        if n_missing:
-            log.warning("  %d patient(s) have no fills; index_date is null -> NaN labels", n_missing)
     vitals = _read_parquet(VITALS_PATH, "vitals")
     conditions = _read_parquet(CONDITIONS_PATH, "conditions")
+    patients = _read_parquet(PATIENTS_PATH, "patients")
     with open(CODE_DICT_PATH) as f:
         code_dictionary = yaml.safe_load(f)
     log.info("  loaded code_dictionary.yaml")
+
+    # ----- Incident index_date + baseline eligibility ----------------------
+    # index_date = first antihypertensive fill preceded by a WASHOUT_DAYS clean period
+    # (new-user design). The prior first-ever-fill logic pulled index dates 10+ years
+    # back for chronic patients, predating observation coverage and zeroing out baseline BP.
+    if INDEX_DATE_COL not in cohort.columns:
+        log.info("Deriving incident %s (washout=%dd)...", INDEX_DATE_COL, WASHOUT_DAYS)
+        idx = _incident_index_date(meds).rename(INDEX_DATE_COL)
+        cohort = cohort.merge(idx, left_on=PATIENT_ID_COL, right_index=True, how="left")
+
+    n_total = len(cohort)
+    no_fill = cohort[INDEX_DATE_COL].isna().sum()
+
+    # Baseline eligibility: require >=1 observation in the baseline window. Patients who
+    # fail are EXCLUDED (no imputation of missing baseline BP).
+    log.info("Applying baseline eligibility (>=1 obs in prior %dd)...", BASELINE_WINDOW_DAYS)
+    eligible = _baseline_eligible_ids(cohort.dropna(subset=[INDEX_DATE_COL]), vitals)
+    keep = cohort[INDEX_DATE_COL].notna() & cohort[PATIENT_ID_COL].isin(eligible)
+    included, excluded = cohort[keep], cohort[~keep]
+    log.info("  eligible %d / %d (%.1f%%); excluded %d (%d no fill, %d no baseline obs)",
+             len(included), n_total, 100 * len(included) / n_total,
+             len(excluded), no_fill, len(excluded) - no_fill)
+    _log_selection_bias(included, excluded, conditions, patients)
+    cohort = included
 
     # ----- Compute outcome labels (kept OUT of the feature matrix) ---------
     log.info("Calculating PDC outcome labels (180d forward, post-index)...")

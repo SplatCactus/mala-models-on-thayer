@@ -97,7 +97,7 @@ def compute_bp_trajectory(
     code_col: str = "CODE",
     date_col: str = "DATE",
     value_col: str = "VALUE",
-    lookback_days: int = 365,
+    lookback_days: int = 1095,
 ) -> pd.DataFrame:
     """Compute systolic & diastolic BP trajectory features per cohort patient.
 
@@ -164,10 +164,8 @@ def compute_bp_trajectory(
         right_on=cohort_patient_col,
         how="inner",
     )
-    lookback = pd.to_timedelta(lookback_days, unit="D")
     in_window = (
-        (vit["_date"] >= vit["_index_date"] - lookback)
-        & (vit["_date"] < vit["_index_date"])
+        vit["_date"].dt.normalize() <= vit["_index_date"].dt.normalize()
     )
     vit = vit[in_window]
 
