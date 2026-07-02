@@ -163,6 +163,15 @@ class MetricResult:
     description: str
     threshold_description: str
     disclaimer: str = field(default="")
+    #: Auxiliary numeric context that doesn't fit `overall_value` /
+    #: `per_stratum` cleanly — e.g. the no-skill reference Brier score a
+    #: model's Brier score is being compared against (spec §2a defines
+    #: "well-calibrated" relative to this reference, so it must be
+    #: reportable alongside the model's own number), or IPCW pair-count
+    #: diagnostics for the AUC estimator. Keep this to primitives
+    #: (float/int/str) — it is report-facing, not a dumping ground for
+    #: intermediate arrays.
+    extra: dict[str, float | int | str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.disclaimer:

@@ -20,12 +20,14 @@ functions rather than one blended "fairness score" (spec §3 rationale):
 Also implements: resolve_language() — the `language` column lookup with
 the ethnicity-proxy fallback agreed on for spec §6 / Assumption A6.
 
-Status: SCAFFOLD. All computation in this module is pure statistics/logic
-(chi-square, ratios, gap checks) with no dependency on which survival
-library or model class is used, so — per the scaffolding brief — nothing
-here is stubbed on "which model library." The only TODOs are the ones
-inherited from calibration.py's still-stubbed AUC/Brier functions, which
-this module does not itself call.
+Status: fully implemented against synthetic-array fixtures. All computation
+in this module is pure statistics/logic (chi-square, ratios, gap checks)
+plus direct reuse of calibration.py's now-fully-implemented C-index and
+calibration-slope functions (IPCW AUC/Brier were the two pieces of
+calibration.py that were stubbed pending the lifelines-only decision —
+that decision is now locked and implemented there; this module doesn't
+call those two functions directly, so it was never blocked by them).
+Remaining TODOs below are narrow implementation notes, not open decisions.
 """
 from __future__ import annotations
 
