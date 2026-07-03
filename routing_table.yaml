@@ -1,0 +1,155 @@
+# routing_table.yaml
+#
+# Versioned, human-inspectable routing rules for the medication persistence
+# intervention. This file is the single source of truth for how a patient's
+# top modifiable SHAP driver maps to a UI action. No ML lives here — only
+# deterministic, auditable rules. Any change to this file should bump
+# `version` and be reviewed like a clinical protocol change, because it is one.
+#
+# ---------------------------------------------------------------------------
+# ASSUMPTIONS MADE (not covered by the 4 logged product resolutions):
+#   - `isolation`         -> chw_call   (community health worker best suited
+#                                         to address social-connection gaps)
+#   - `low_education`     -> chw_call   (health-literacy support)
+# These two were not specified in the resolutions log and should be
+# confirmed with product before this table is treated as final.
+# ---------------------------------------------------------------------------
+
+version: 1
+schema_version: "1.0"
+last_updated: "2026-07-03"
+
+# Relative-margin tie-break threshold. The top SHAP driver must exceed the
+# second-ranked driver's |value| by this multiple to be used directly.
+# Otherwise, fall back to `clinical_hierarchy` below.
+tie_break_margin: 1.25
+
+# Strict clinical hierarchy used ONLY when the top-2 SHAP values are within
+# the tie-break margin of each other. Order matters: first match wins.
+# Note: trauma_exposure is NOT part of this hierarchy — it is a hard safety
+# override that is checked before tie-breaking logic runs at all (see
+# `safety_overrides` below).
+clinical_hierarchy:
+  - housing_barrier
+  - financial_barrier
+  - transport_barrier
+  - isolation
+  - low_education
+  - migrant_status
+  - bp_trend
+
+# Drivers that are out of scope this sprint and must be remapped to a
+# fallback driver before routing logic ever sees them.
+driver_fallbacks:
+  regimen_complexity: bp_trend   # Resolution #4: fall back to BP trend features
+
+# Hard safety overrides. These bypass SHAP ranking, tie-break margin, and
+# clinical hierarchy entirely. Checked first, always. If a patient's driver
+# set includes any key listed here, that action is forced and no other
+# logic runs.
+safety_overrides:
+  trauma_exposure:
+    action: social_worker
+    requires_human_review: true
+    rationale_en: >-
+      Trauma exposure (IPV) detected as a contributing factor. Routed
+      directly to social worker per clinical safety protocol; flagged for
+      mandatory human review before any automated outreach occurs.
+    rationale_es: >-
+      Se detectó exposición a trauma (violencia de pareja) como factor
+      contribuyente. Se deriva directamente a trabajo social según el
+      protocolo de seguridad clínica; se marca para revisión humana
+      obligatoria antes de cualquier contacto automatizado.
+
+# Standard driver -> action map. Each entry defines the primary action,
+# an optional secondary_action (carried in the background data layer only,
+# never surfaced as a second primary UI action), and bilingual audit
+# rationale templates. `{patient_id}` and `{value}` are available for
+# string interpolation by rules.py.
+drivers:
+  housing_barrier:
+    action: social_worker
+    secondary_action: null
+    rationale_en: >-
+      Top modifiable driver is housing instability (SHAP value {value:.3f}).
+      Routed to social worker for housing-support resources.
+    rationale_es: >-
+      El principal factor modificable es la inestabilidad de vivienda
+      (valor SHAP {value:.3f}). Se deriva a trabajo social para recursos
+      de apoyo de vivienda.
+
+  financial_barrier:
+    action: social_worker
+    secondary_action: null
+    rationale_en: >-
+      Top modifiable driver is financial barrier to medication access
+      (SHAP value {value:.3f}). Routed to social worker for financial
+      assistance / benefits navigation.
+    rationale_es: >-
+      El principal factor modificable es una barrera financiera para el
+      acceso a medicamentos (valor SHAP {value:.3f}). Se deriva a trabajo
+      social para asistencia financiera y navegación de beneficios.
+
+  transport_barrier:
+    action: social_worker
+    secondary_action: null
+    rationale_en: >-
+      Top modifiable driver is transportation barrier (SHAP value
+      {value:.3f}). Routed to social worker per mock-data precedent for
+      transport-related cases.
+    rationale_es: >-
+      El principal factor modificable es una barrera de transporte
+      (valor SHAP {value:.3f}). Se deriva a trabajo social, conforme al
+      precedente establecido para casos de transporte.
+
+  isolation:
+    action: chw_call
+    secondary_action: null
+    rationale_en: >-
+      Top modifiable driver is social isolation (SHAP value {value:.3f}).
+      Routed to CHW call for social-connection outreach. [assumption —
+      confirm with product]
+    rationale_es: >-
+      El principal factor modificable es el aislamiento social (valor
+      SHAP {value:.3f}). Se deriva a llamada de un trabajador comunitario
+      de salud (CHW). [supuesto — confirmar con producto]
+
+  low_education:
+    action: chw_call
+    secondary_action: null
+    rationale_en: >-
+      Top modifiable driver is low health-literacy / education level
+      (SHAP value {value:.3f}). Routed to CHW call for literacy-adapted
+      medication counseling. [assumption — confirm with product]
+    rationale_es: >-
+      El principal factor modificable es un bajo nivel de alfabetización
+      en salud / educación (valor SHAP {value:.3f}). Se deriva a llamada
+      de CHW para asesoría adaptada al nivel de alfabetización. [supuesto
+      — confirmar con producto]
+
+  migrant_status:
+    action: chw_call
+    secondary_action: social_worker
+    rationale_en: >-
+      Top modifiable driver is migrant status (SHAP value {value:.3f}).
+      Routed to CHW call as primary action; social worker recorded as
+      secondary action in background data layer only.
+    rationale_es: >-
+      El principal factor modificable es el estatus migratorio (valor
+      SHAP {value:.3f}). Se deriva a llamada de CHW como acción primaria;
+      trabajo social se registra como acción secundaria solo en la capa
+      de datos de fondo.
+
+  bp_trend:
+    action: pharmacist
+    secondary_action: null
+    rationale_en: >-
+      Top modifiable driver is blood-pressure trend (SHAP value
+      {value:.3f}), including cases remapped from regimen complexity
+      (out of scope this sprint). Routed to pharmacist for medication
+      review.
+    rationale_es: >-
+      El principal factor modificable es la tendencia de presión arterial
+      (valor SHAP {value:.3f}), incluidos los casos redirigidos desde
+      complejidad del régimen (fuera de alcance este sprint). Se deriva
+      a farmacéutico para revisión de medicación.
