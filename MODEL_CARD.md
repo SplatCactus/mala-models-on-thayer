@@ -1,6 +1,43 @@
 # Model Card — BP Cascade RI Persistence-Risk Model
 
-Last updated: 2026-07-01 (baseline results added after first training run on the 1K cohort)
+Last updated: 2026-07-02 (pivoted to binary classification; current primary model is `shallow_random_forest`)
+
+## Pivot: binary classification (2026-07-02)
+
+Team decision: go with Chris's classification framing (stratified K-fold CV,
+Logistic Regression / shallow Random Forest, PR-AUC/F1) instead of continuing
+the survival-analysis approach below. Two things made this the right call,
+not just a stylistic preference:
+
+1. **Sample size.** The incident-user cohort fix (washout + baseline BP
+   eligibility, `build_features.py`) shrank the cohort to 115–136 patients
+   depending on exact eligibility criteria at time of build — too small for
+   a single held-out temporal split to give a stable estimate (the original
+   262-patient survival run already hit 1 event in its val split).
+2. **It sidesteps the survival duration proxy for free.** The old approach
+   needed an approximated time-to-event because `pdc.py` has no real
+   gap-onset timestamp (see limitation in the historical section below). A
+   plain classifier just uses `has_30_day_gap` directly.
+
+`src/models/survival.py` and `src/models/splits.py` are kept as-is
+(unused by the current pipeline) — valid infrastructure for if/when the
+cohort is large enough to support a temporal split again (e.g. once the
+300K-patient SyntheticRI set is in play). `src/models/common.py` now holds
+the shared leakage-rule enforcement (`select_feature_columns`) both
+`survival.py` and `classifier.py` depend on, so there is exactly one place
+that rule can break, not one per model family.
+
+**Known-leakage note**: results below were trained after fixing a real bug
+in `src/features/trajectories.py` (the BP lookback window had lost its
+lower bound and used `<=` instead of `<`, so same-day-as-index-date BP
+readings and unbounded lookback were leaking into "pre-treatment baseline"
+features — confirmed by `tests/test_leakage.py` failing 2/10 before the fix,
+and by a suspiciously high PR-AUC that dropped once corrected). All numbers
+below are post-fix.
+
+**This is on the 1K-derived incident-user cohort (n=115), not yet the
+300K-patient set** — Chris is running the 300K build next; treat these as
+the last checkpoint before that, not a final result.
 
 ## What this model does
 
@@ -23,6 +60,17 @@ the appropriate CHW/pharmacist/social-worker intervention (see
 
 ## What was built this session
 
+- **`src/models/classifier.py`** — the current pipeline. Loads the full
+  cohort directly (no split file — K-fold re-splits at training time),
+  builds Logistic Regression and shallow Random Forest pipelines
+  (median-impute + `class_weight="balanced"`), and runs stratified K-fold CV
+  reporting PR-AUC/F1 per fold plus mean/std. Fails loudly (`ValueError`) if
+  the minority class has fewer patients than `n_splits`, rather than
+  surfacing sklearn's less specific error.
+- **`src/models/common.py`** — `select_feature_columns`/`save_model`/
+  `load_model`, extracted out of `survival.py` so `classifier.py` doesn't
+  transitively depend on scikit-survival for one shared function. Single
+  place the feature/outcome leakage rule is enforced for every model family.
 - **`src/models/splits.py`** — temporal train/val/test split (70/15/15
   default) ordered by `index_date`, not random. A runtime assertion
   (`_assert_no_temporal_leakage`) fails loudly if any split boundary is out
@@ -41,7 +89,42 @@ the appropriate CHW/pharmacist/social-worker intervention (see
   `pdc.py` (a pre-index fill must not count toward the forward coverage
   window). **All 10 passing.**
 
-## Results — baseline trained on the 1K cohort
+## Results — classification models (current)
+
+Cohort: **115 patients** (incident-user, post-leakage-fix), **51.3% positive**
+(`has_30_day_gap`, 59/115) — a near-balanced label, unlike the older
+262-patient cohort's 78/22 split. 5-fold stratified CV (`run_stratified_cv`),
+fresh model per fold, no shared fitted state across folds.
+
+| model | PR-AUC | F1 |
+|---|---|---|
+| no-skill baseline (positive rate) | 0.513 | — |
+| Logistic Regression (L2, C=0.1, `class_weight="balanced"`) | 0.625 ± 0.079 | 0.618 ± 0.101 |
+| Shallow Random Forest (`max_depth=4`, `class_weight="balanced"`) | **0.657 ± 0.071** | **0.687 ± 0.056** |
+
+Both models clear the no-skill baseline with some margin — the first result
+in this project that isn't statistically indistinguishable from chance.
+Shallow Random Forest is the better of the two on both metrics and is the
+current primary model (`models/shallow_random_forest.joblib`).
+
+**Caveats before reading too much into this:**
+- n=115 with 5-fold CV means each fold's validation set is ~23 patients —
+  the ±0.07-0.10 spread across folds reflects that; treat the point estimate
+  as directionally right, not precise to the second decimal.
+- This cohort is now "new antihypertensive users with recent BP vitals
+  coverage" specifically (per the incident-user/baseline-eligibility fix) —
+  narrower than the original treated-hypertensive population. Results may
+  not generalize to chronic/legacy patients who were filtered out.
+- Feature set is BP trajectory (`sbp_*`/`dbp_*`, now 100% and 78% complete
+  respectively, up from ~5%/~1% pre-fix) plus SDOH flags and age —
+  demographics are still held aside from the model, same as survival.py.
+
+## Historical: survival-analysis baseline (superseded, kept for reference)
+
+Trained on the earlier 262-patient cohort, before the incident-user cohort
+fix and before the team's classification pivot. Not maintained further, but
+`survival.py`/`splits.py` remain in the repo since they're valid
+infrastructure for a future larger cohort.
 
 Temporal split (by `index_date`, via `splits.py`): **183 train / 39 val / 40
 test**. Event rate (`has_30_day_gap`) varies sharply by split just from
@@ -83,12 +166,13 @@ baseline.
    fixed), but it's still a TEMP stand-in for a real clinical index date
    (e.g. an HTN diagnosis date). Splits/model treat it as an injected
    parameter, so swapping in a real index date requires no changes here.
-2. **Survival duration is a proxy, not a true event time.** `pdc.py` only
-   reports *whether* a gap occurred in the 180-day window, not the day it
-   started. `build_survival_labels` (in `survival.py`) approximates duration
-   as `pdc_180d * 180` for patients with a gap, and the full window for
-   censored patients. This is documented in-code as an approximation;
-   replace it once `pdc.py` emits a real gap-onset day.
+2. **Survival duration is a proxy, not a true event time** — applies to
+   `survival.py` only (historical/superseded); `classifier.py` doesn't need
+   this since it uses `has_30_day_gap` directly. `pdc.py` only reports
+   *whether* a gap occurred in the 180-day window, not the day it started.
+   `build_survival_labels` (in `survival.py`) approximates duration as
+   `pdc_180d * 180` for patients with a gap, and the full window for
+   censored patients. Documented in-code as an approximation.
 3. **Death is not treated as censoring.** `cohort.py` drops `DEATHDATE`
    before the cohort snapshot is written, so a patient who dies mid-window
    (and therefore stops refilling) is currently labeled as a gap rather
@@ -104,26 +188,35 @@ baseline.
 
 ## Evaluation
 
-Harrell's concordance index (`evaluate_survival_model`) and cumulative/
-dynamic time-dependent AUC (`evaluate_time_dependent_auc`, added after the
-first baseline run). Integrated Brier score is intentionally omitted — it
-needs an absolute timescale to calibrate against, and the duration proxy
-above isn't trustworthy enough for that yet (both concordance and
-time-dependent AUC are ranking metrics, more robust to the proxy than a
-calibration metric would be).
+**Current (classifier.py)**: PR-AUC and F1 via stratified K-fold CV, against
+a no-skill (positive-rate) baseline for context — chosen over accuracy given
+the class balance is close to 50/50 now but wasn't guaranteed to be, and
+PR-AUC/F1 were Chris's explicit ask.
 
-## Edge cases handled (see `survival.py`/`splits.py`)
+**Historical (survival.py)**: Harrell's concordance index and cumulative/
+dynamic time-dependent AUC. Integrated Brier score was intentionally
+omitted there — needed an absolute timescale to calibrate against, and the
+duration proxy wasn't trustworthy enough for that.
 
-- Empty cohorts, all-missing-`index_date` cohorts, and 1-2-patient cohorts
-  split without crashing.
-- A split where every patient has an unlabeled outcome, or where a split
-  has zero observed events (all-censored), now raises a clear `ValueError`
-  naming the split and patient count — instead of a raw sklearn/sksurv
-  stack trace several layers removed from the actual cause.
+## Edge cases handled
+
+- `splits.py`/`survival.py`: empty cohorts, all-missing-`index_date`
+  cohorts, and 1-2-patient cohorts split without crashing. A split where
+  every patient has an unlabeled outcome, or has zero observed events
+  (all-censored), raises a clear `ValueError` naming the split and patient
+  count instead of a raw sklearn/sksurv stack trace.
+- `classifier.py`: `run_stratified_cv` raises `ValueError` naming the actual
+  class counts if the minority class has fewer patients than `n_splits`,
+  instead of surfacing sklearn's less specific error.
 
 ## Artifacts
 
-Fitted model: `models/survival_rsf.joblib` (gitignored, produced by
+Current: `models/logistic_regression.joblib` and
+`models/shallow_random_forest.joblib` (gitignored, produced by
+`python src/models/classifier.py`; each refit on the full 115-patient
+cohort after CV evaluation — the fold-level fits are not what's saved).
+
+Historical: `models/survival_rsf.joblib` (gitignored, produced by
 `python src/models/survival.py`). Frozen split assignment:
 `data/snapshots/splits.parquet` (gitignored, produced by
 `python src/models/splits.py`).

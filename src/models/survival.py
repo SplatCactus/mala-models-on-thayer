@@ -1,5 +1,12 @@
 """survival.py — tree-based survival model for antihypertensive persistence.
 
+STATUS (2026-07-02): superseded as the team's primary approach by
+classifier.py, per team decision to follow Chris's classification framing
+now that the incident-user cohort fix shrank the cohort to 136 patients (see
+classifier.py's module docstring for the full rationale). This module is
+kept as-is -- it's a documented, working baseline (see MODEL_CARD.md) -- but
+new work should go into classifier.py, not here.
+
 Consumes the artifacts produced upstream:
 
     feature_panel.parquet   (X) -- src/features/build_features.py
@@ -15,9 +22,12 @@ already enforced inside src/features/*.py -- this module enforces the
 feature/outcome separation at the model-input boundary):
 
   1. Outcome columns (``pdc_180d``, ``has_30_day_gap``) must never end up in
-     the feature matrix X. :func:`select_feature_columns` raises
-     ``AssertionError`` if they do, instead of silently excluding them --
-     this is a hard runtime guard, not just a naming convention.
+     the feature matrix X. :func:`common.select_feature_columns` (imported,
+     not redefined here -- see common.py) raises ``AssertionError`` if they
+     do, instead of silently excluding them -- this is a hard runtime guard,
+     not just a naming convention. classifier.py enforces the same rule via
+     the same function, so there is exactly one leakage rule to keep
+     correct across both model families, not one per family.
   2. Demographic columns attached in src/etl/cohort.py "for equity strata"
      (RACE, ETHNICITY, GENDER, CITY, STATE, ZIP, LAT, LON,
      HEALTHCARE_EXPENSES, HEALTHCARE_COVERAGE, INCOME, is_deceased) are held
@@ -61,7 +71,7 @@ module.
 
 Public API
 ----------
-select_feature_columns(panel_df, ...) -> list[str]
+select_feature_columns(panel_df, ...) -> list[str]  (re-exported from common.py)
 build_survival_labels(labels_df, ...) -> structured ndarray (event, time)
 load_training_frame(panel_path, labels_path, splits_path, split_name, ...)
     -> (X, y, patient_ids)
@@ -70,7 +80,7 @@ predict_risk(model, X) -> ndarray
 predict_survival_function(model, X) -> ndarray of step functions
 evaluate_survival_model(model, X, y) -> dict
 evaluate_time_dependent_auc(model, y_train, X_eval, y_eval, times) -> dict
-save_model(model, path) / load_model(path)
+save_model(model, path) / load_model(path)  (re-exported from common.py)
 """
 from __future__ import annotations
 
@@ -80,16 +90,22 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import joblib
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sksurv.ensemble import RandomSurvivalForest
 from sksurv.metrics import concordance_index_censored, cumulative_dynamic_auc
 from sksurv.util import Surv
 
-ROOT = Path(__file__).resolve().parents[2]
-PANEL_PATH = ROOT / "feature_panel.parquet"
-LABELS_PATH = ROOT / "labels.parquet"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from common import (  # noqa: E402
+    ROOT,
+    PANEL_PATH,
+    LABELS_PATH,
+    select_feature_columns,
+    save_model,
+    load_model,
+)
+
 SPLITS_PATH = ROOT / "data" / "snapshots" / "splits.parquet"
 MODEL_OUTPUT_PATH = ROOT / "models" / "survival_rsf.joblib"
 
@@ -98,28 +114,6 @@ MODEL_OUTPUT_PATH = ROOT / "models" / "survival_rsf.joblib"
 # "KNOWN LIMITATION" for why this is a constant rather than a per-patient
 # value.
 FORWARD_DAYS = 180
-
-# Outcome columns from labels.parquet (src/features/pdc.py). These must
-# never appear among the selected feature columns.
-OUTCOME_COLUMNS = frozenset({"pdc_180d", "has_30_day_gap"})
-
-# Identifier / non-feature columns.
-NON_FEATURE_ID_COLUMNS = frozenset({"patient_id", "index_date", "Id", "split"})
-
-# Demographic columns attached in src/etl/cohort.py "for equity strata" --
-# held aside from the model by design (see module docstring). Not an
-# exhaustive schema validation, just the columns cohort.py is known to emit.
-HELD_ASIDE_DEMOGRAPHIC_COLUMNS = frozenset({
-    "RACE", "ETHNICITY", "GENDER", "CITY", "STATE", "ZIP", "LAT", "LON",
-    "HEALTHCARE_EXPENSES", "HEALTHCARE_COVERAGE", "INCOME", "is_deceased",
-})
-
-# Clinical/SDOH feature prefixes emitted by src/features/trajectories.py
-# (sbp_*, dbp_*) and src/features/sdoh.py (flag_*).
-FEATURE_PREFIXES = ("sbp_", "dbp_", "flag_")
-
-# Non-prefixed columns explicitly allowed as features.
-EXPLICIT_FEATURE_COLUMNS = frozenset({"age_years"})
 
 DEFAULT_MODEL_PARAMS = dict(
     n_estimators=200,
@@ -136,43 +130,6 @@ logging.basicConfig(
     stream=sys.stdout,
 )
 log = logging.getLogger("survival")
-
-
-def select_feature_columns(
-    panel_df: pd.DataFrame,
-    *,
-    patient_id_col: str = "patient_id",
-) -> list[str]:
-    """Pick the modeling feature columns out of a merged panel+labels frame.
-
-    Only columns matching :data:`FEATURE_PREFIXES` or listed in
-    :data:`EXPLICIT_FEATURE_COLUMNS` are selected. Identifier columns
-    (:data:`NON_FEATURE_ID_COLUMNS`), outcome columns
-    (:data:`OUTCOME_COLUMNS`), and held-aside demographics
-    (:data:`HELD_ASIDE_DEMOGRAPHIC_COLUMNS`) are always excluded.
-
-    Raises
-    ------
-    AssertionError
-        If an outcome column ever ends up selected -- this is the explicit
-        code-level enforcement of the feature/outcome leakage rule, not just
-        a naming convention.
-    """
-    selected = [
-        col for col in panel_df.columns
-        if col != patient_id_col
-        and col not in NON_FEATURE_ID_COLUMNS
-        and col not in OUTCOME_COLUMNS
-        and col not in HELD_ASIDE_DEMOGRAPHIC_COLUMNS
-        and (col.startswith(FEATURE_PREFIXES) or col in EXPLICIT_FEATURE_COLUMNS)
-    ]
-
-    leaked = OUTCOME_COLUMNS & set(selected)
-    if leaked:
-        raise AssertionError(
-            f"outcome column(s) {sorted(leaked)} selected as model features -- leakage"
-        )
-    return selected
 
 
 def build_survival_labels(
@@ -380,16 +337,6 @@ def evaluate_time_dependent_auc(
     risk_scores = predict_risk(model, X_eval)
     auc, mean_auc = cumulative_dynamic_auc(y_train, y_eval, risk_scores, times)
     return {"times": times, "auc": auc, "mean_auc": float(mean_auc)}
-
-
-def save_model(model: Pipeline, path: Path | str) -> None:
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump(model, path)
-
-
-def load_model(path: Path | str) -> Pipeline:
-    return joblib.load(Path(path))
 
 
 def main() -> int:
