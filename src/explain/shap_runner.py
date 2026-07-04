@@ -53,18 +53,34 @@ from sklearn.preprocessing import StandardScaler
 
 # Raw feature -> clinical driver category. Multiple raw features can roll
 # up into one driver (e.g. blood pressure trend features).
+#
+# CORRECTED 2026-07-04: this taxonomy previously referenced placeholder
+# column names (housing_barrier_score, isolation_score, sbp_slope, ...)
+# that no feature module actually produces -- SHAPRunner.fit() would raise
+# a KeyError against the real feature_panel.parquet. Replaced with the
+# actual columns emitted by src/features/sdoh.py (flag_sdoh_*, flag_*) and
+# src/features/trajectories.py (*_trajectory_slope). The driver *names*
+# on the right-hand side are unchanged and still match routing_table.yaml
+# (drivers:/clinical_hierarchy:/safety_overrides: keys) -- only the raw
+# input-column mapping was wrong, not the taxonomy itself or anything
+# downstream in rules.py/capacity.py.
 FEATURE_TO_DRIVER: Dict[str, str] = {
-    "housing_barrier_score": "housing_barrier",
-    "financial_barrier_score": "financial_barrier",
-    "transport_barrier_score": "transport_barrier",
-    "isolation_score": "isolation",
-    "low_education_score": "low_education",
-    "migrant_status_flag": "migrant_status",
-    "sbp_slope": "bp_trend",
-    "dbp_slope": "bp_trend",
-    "regimen_complexity_score": "regimen_complexity",
-    "trauma_exposure_flag": "trauma_exposure",
+    "flag_sdoh_housing_barrier": "housing_barrier",
+    "flag_sdoh_financial_barrier": "financial_barrier",
+    "flag_sdoh_transport_barrier": "transport_barrier",
+    "flag_sdoh_isolation_any": "isolation",
+    "flag_sdoh_low_education": "low_education",
+    "flag_migrant_any": "migrant_status",
+    "sbp_trajectory_slope": "bp_trend",
+    "dbp_trajectory_slope": "bp_trend",
+    "flag_trauma_exposure": "trauma_exposure",
 }
+# NOTE: "regimen_complexity" (routing_table.yaml's driver_fallbacks target)
+# intentionally has no entry here -- no feature module in src/features/
+# computes a regimen-complexity signal. The fallback remap in rules.py is
+# defensive/no-op until such a feature exists; it is not a missing case,
+# it's an honestly-empty one. Do not fabricate a placeholder column to
+# fill it.
 
 # Drivers that are eligible to be routed on. `trauma_exposure` is included
 # here because shap_runner must still surface it — rules.py is what treats
@@ -73,11 +89,16 @@ MODIFIABLE_DRIVERS = set(FEATURE_TO_DRIVER.values())
 
 # Context features that inform the risk model but are never routing
 # candidates. Kept out of FEATURE_TO_DRIVER on purpose.
+#
+# CORRECTED 2026-07-04: age/baseline_adherence/months_on_therapy/
+# num_comorbidities were placeholders -- only age_years is actually
+# produced anywhere in src/features/*.py or src/etl/cohort.py today.
+# Re-add the others here (and build a producer for them under
+# src/features/) if/when they exist; do not carry forward columns that
+# don't exist just to keep this list looking more complete than the data
+# actually is.
 NON_MODIFIABLE_FEATURES = [
-    "age",
-    "baseline_adherence",
-    "months_on_therapy",
-    "num_comorbidities",
+    "age_years",
 ]
 
 ALL_MODEL_FEATURES = list(FEATURE_TO_DRIVER.keys()) + NON_MODIFIABLE_FEATURES
@@ -121,7 +142,20 @@ class SHAPRunner:
         """Fit the underlying linear risk model.
 
         X must contain exactly ALL_MODEL_FEATURES columns (order-independent;
-        we reindex). y is a binary label: 1 = discontinued/non-persistent.
+        we reindex). y is a binary label: 1 = discontinued/non-persistent
+        (i.e. AT RISK), 0 = persistent/adherent.
+
+        RISK POLARITY (confirmed by Chris, 2026-07-04): predicted_risk must
+        be "higher number = higher risk," using the standard 0.80 PDC
+        adherence threshold to define the positive class -- y=1 iff
+        pdc_180d < 0.80 (below the CMS/PQA adherence cutoff = at risk).
+        This is the OPPOSITE polarity from classifier.py's own default
+        (`load_classification_frame`'s default binarizes pdc_180d >= 0.80
+        as the positive class, i.e. y=1 there means *adherent*). Callers
+        of this class (see src/run_routing_pipeline.py) must build y with
+        the at-risk-positive polarity documented here -- this class does
+        not re-derive or flip the label itself, so passing the wrong
+        polarity in silently inverts every downstream routing decision.
         """
         X = X[ALL_MODEL_FEATURES]
         X_scaled = self.scaler.fit_transform(X)
