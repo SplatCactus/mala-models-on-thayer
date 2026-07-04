@@ -39,12 +39,12 @@ from sdoh import compute_sdoh_flags  # noqa: E402
 # CONFIG  — edit paths / column names here
 # =============================================================================
 ROOT = Path(__file__).resolve().parents[2]
-PARQUET = ROOT / "data" / "parquet"
+PARQUET = ROOT / "data" / "parquet_300k"   # 300k parquet (1k was data/parquet)
 
 # Inputs.
-COHORT_PATH = ROOT / "data" / "cohort_patients_1k.parquet"   # must have PATIENT_ID_COL + INDEX_DATE_COL
+COHORT_PATH = ROOT / "data" / "snapshots" / "cohort_patients.parquet"  # output of src/etl/cohort.py
 MEDS_PATH = PARQUET / "medications.parquet"
-VITALS_PATH = PARQUET / "observations.parquet"               # BP = LOINC subset of observations
+VITALS_PATH = PARQUET / "observations_bp.parquet"            # BP-only subset written by ingest.py
 CONDITIONS_PATH = PARQUET / "conditions.parquet"             # SDOH SNOMED source (NOT observations)
 PATIENTS_PATH = PARQUET / "patients.parquet"                 # demographics for selection-bias report
 CODE_DICT_PATH = ROOT / "code_dictionary.yaml"
@@ -60,7 +60,7 @@ CONDITIONS_DATE_COL = "START"       # conditions.parquet date column
 
 # Incident / new-user cohort design.
 WASHOUT_DAYS = 365          # index_date = first antihypertensive fill with NO prior fill in the preceding WASHOUT_DAYS
-BASELINE_WINDOW_DAYS = 365  # keep only patients with >=1 observation in [index_date - BASELINE_WINDOW_DAYS, index_date]
+BASELINE_WINDOW_DAYS = 1095  # keep only patients with >=1 observation in [index_date - BASELINE_WINDOW_DAYS, index_date]
 REFERENCE_DATE = "2026-07-01"  # "today" for the age calc in the selection-bias report
 HTN_DX_CODE = "59621000"    # SNOMED essential hypertension, for years-since-first-dx
 SYSTOLIC_BP_CODE = "8480-6" # LOINC systolic BP; baseline eligibility requires one of these
@@ -130,7 +130,7 @@ def _baseline_eligible_ids(cohort: pd.DataFrame, observations: pd.DataFrame) -> 
         left_on="PATIENT", right_on=PATIENT_ID_COL, how="inner",
     )
     lo = obs[INDEX_DATE_COL] - pd.to_timedelta(BASELINE_WINDOW_DAYS, unit="D")
-    in_baseline = (obs["_d"] >= lo) & (obs["_d"] <= obs[INDEX_DATE_COL])
+    in_baseline = (obs["_d"] >= lo) & (obs["_d"] < obs[INDEX_DATE_COL])
     return set(obs.loc[in_baseline, PATIENT_ID_COL].unique())
 
 

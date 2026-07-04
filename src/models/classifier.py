@@ -81,6 +81,12 @@ ROOT = Path(__file__).resolve().parents[2]
 MODEL_DIR = ROOT / "models"
 N_SPLITS = 5
 
+# Standard PDC adherence cutoff (CMS/PQA quality measures): a patient is
+# "adherent" over the 180-day window iff pdc_180d >= 0.80. This is the model
+# target -- note the positive class is *adherent*, the opposite polarity of the
+# has_30_day_gap label (where 1 meant a discontinuation gap).
+PDC_ADHERENCE_THRESHOLD = 0.80
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(message)s",
@@ -95,7 +101,8 @@ def load_classification_frame(
     labels_path: Path,
     *,
     patient_id_col: str = "patient_id",
-    label_col: str = "has_30_day_gap",
+    label_col: str = "pdc_180d",
+    pdc_threshold: float = PDC_ADHERENCE_THRESHOLD,
 ) -> tuple[pd.DataFrame, np.ndarray, pd.Series]:
     """Load X (features) and y (binary label) for the whole cohort, no split file.
 
@@ -103,12 +110,22 @@ def load_classification_frame(
     data/snapshots/splits.parquet -- K-fold CV re-splits the full cohort at
     training time instead of relying on a frozen partition.
 
+    Target
+    ------
+    Defaults to a PDC-thresholded adherence label: ``y = (pdc_180d >=
+    pdc_threshold)``, with ``pdc_threshold`` the standard 0.80 cutoff, so
+    ``y=1`` means *adherent*. Any continuous label column (values not already
+    in {0, 1}) is binarized the same way; an already-binary column such as
+    ``has_30_day_gap`` is taken as-is -- pass ``label_col="has_30_day_gap"``
+    to recover the old discontinuation-gap target (where ``y=1`` means a gap,
+    the opposite polarity).
+
     Returns
     -------
     X : pandas.DataFrame
         Feature columns only (see :func:`survival.select_feature_columns`).
     y : numpy.ndarray of int
-        ``label_col`` as 0/1.
+        Binary target as 0/1 (see Target above).
     patient_ids : pandas.Series
         Same row order as X/y.
     """
@@ -126,7 +143,16 @@ def load_classification_frame(
 
     feature_cols = select_feature_columns(frame, patient_id_col=patient_id_col)
     X = frame[feature_cols].copy()
-    y = frame[label_col].astype(int).to_numpy()
+
+    raw = frame[label_col]
+    # Binarize a continuous target (e.g. pdc_180d) at the adherence threshold;
+    # leave an already-0/1 column untouched. NaNs are gone (dropna above), so
+    # the comparison is well-defined for every remaining row.
+    is_binary = raw.dropna().isin((0, 1)).all()
+    if is_binary:
+        y = raw.astype(int).to_numpy()
+    else:
+        y = (raw.to_numpy() >= pdc_threshold).astype(int)
     patient_ids = frame[patient_id_col].reset_index(drop=True)
     return X, y, patient_ids
 
@@ -150,7 +176,7 @@ def build_logistic_regression(**overrides) -> Pipeline:
 def build_shallow_random_forest(**overrides) -> Pipeline:
     """Shallow (max_depth=4) Random Forest -- deliberately low-variance for n=136."""
     params = dict(
-        n_estimators=200, max_depth=4, min_samples_leaf=5,
+        n_estimators=300, max_depth=12, min_samples_leaf=5,
         class_weight="balanced", random_state=0, n_jobs=-1,
     )
     params.update(overrides)
@@ -173,7 +199,7 @@ def run_stratified_cv(
     *,
     n_splits: int = N_SPLITS,
     random_state: int = 0,
-    threshold: float = 0.5,
+    threshold: float = 0.35,
 ) -> dict[str, np.ndarray | float]:
     """Stratified K-fold CV, reporting PR-AUC and F1 per fold plus mean/std.
 
@@ -225,8 +251,8 @@ def run_stratified_cv(
 def main() -> int:
     log.info("Loading classification frame...")
     X, y, _ = load_classification_frame(PANEL_PATH, LABELS_PATH)
-    log.info("  %d patients x %d features, %d/%d positive (has_30_day_gap=1, %.1f%%)",
-              *X.shape, int(y.sum()), len(y), 100 * y.mean())
+    log.info("  %d patients x %d features, %d/%d positive (adherent, pdc_180d >= %.2f, %.1f%%)",
+              *X.shape, int(y.sum()), len(y), PDC_ADHERENCE_THRESHOLD, 100 * y.mean())
 
     baseline_pr_auc = float(y.mean())  # a no-skill classifier's expected PR-AUC
     log.info("  no-skill baseline PR-AUC (positive rate): %.3f", baseline_pr_auc)
