@@ -42,7 +42,13 @@ import yaml
 
 from src.explain.shap_runner import PatientDriverProfile
 
-DEFAULT_ROUTING_TABLE_PATH = Path(__file__).parent / "routing_table.yaml"
+# BUG FIX 2026-07-04: this previously pointed at
+# src/routing/routing_table.yaml, which doesn't exist -- the file lives at
+# the repo root. RoutingRuleEngine() with default args raised
+# FileNotFoundError unconditionally until this was caught while wiring
+# src/run_routing_pipeline.py end to end (no existing test exercises this
+# default, hence undetected until now).
+DEFAULT_ROUTING_TABLE_PATH = Path(__file__).resolve().parents[2] / "routing_table.yaml"
 
 VALID_ACTIONS = {"pharmacist", "social_worker", "chw_call"}
 
