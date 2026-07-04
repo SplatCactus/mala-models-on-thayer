@@ -46,6 +46,24 @@ from typing import Dict, List
 
 from src.routing.rules import RoutingDecision
 
+# PLACEHOLDER for the datathon demo (kept as-is per 2026-07-04 decision --
+# not yet backed by a real RI staffing number). Sized as round numbers,
+# not derived from actual headcount, and effectively non-binding against
+# the current ~115-262 patient 1K-derived cohort (eligible pool per role
+# is well under these caps at that size). Expect these to bind hard, and
+# to matter a lot, once run against the 300K-derived cohort.
+#
+# TO SCALE THIS PROPERLY LATER:
+#   cap[role] = headcount[role] * caseload_per_worker_per_cycle[role]
+# e.g. if RI has 6 CHWs each realistically working 12 outreach calls per
+# cycle, chw_call's cap = 6 * 12 = 72 -- not a guessed round number. Get
+# headcount + realistic per-worker caseload from the program side (Andres
+# or whoever owns CHW/pharmacist/social-worker staffing) before treating
+# any cap number here as defensible in front of a reviewer. Once those
+# numbers exist, replace the literals below with the explicit
+# headcount * caseload expression (not just a new hardcoded int) so the
+# derivation stays auditable in the diff, the same way routing_table.yaml
+# keeps its rules auditable.
 DEFAULT_ROLE_CAPS: Dict[str, int] = {
     "pharmacist": 40,
     "social_worker": 30,
