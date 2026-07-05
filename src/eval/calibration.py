@@ -74,28 +74,41 @@ def harrell_c_index(risk_scores: np.ndarray, time_to_event: np.ndarray, event: n
     event time is shorter than the other's observed time. The pair is
     concordant if the one with the shorter time also has the higher
     predicted risk.
+
+    Vectorized rewrite of the original O(n^2) double loop -- numerically
+    identical, just fast enough for the 16K-patient cohort. Only a patient
+    who actually had the event can be the "failed-first" member of a
+    comparable pair (the `event[k] == 1` guard in the original), so we loop
+    over just the event rows and vectorize the inner comparison across the
+    whole cohort with numpy -- O(n_events * n) work, O(n) memory, no
+    n-by-n pair matrix. Comparability and the tied-risk = 0.5 credit are
+    preserved exactly, including the original's rule that an event-vs-
+    censored pair is comparable whenever the other row is censored,
+    independent of the two times.
     """
-    n = len(risk_scores)
-    concordant = 0
+    risk = np.asarray(risk_scores, dtype=float)
+    time = np.asarray(time_to_event, dtype=float)
+    event = np.asarray(event)
+
+    event_idx = np.flatnonzero(event == 1)
+    if event_idx.size == 0:
+        return None
+
+    censored = event == 0  # the "or event[longer] == 0" branch, vectorized
+
     permissible = 0
-    tied_risk = 0
-
-    for i in range(n):
-        for j in range(i + 1, n):
-            # Determine if pair is comparable, and which of the two "failed" first.
-            if event[i] == 1 and (time_to_event[i] < time_to_event[j] or event[j] == 0):
-                shorter, longer = i, j
-            elif event[j] == 1 and (time_to_event[j] < time_to_event[i] or event[i] == 0):
-                shorter, longer = j, i
-            else:
-                continue
-
-            permissible += 1
-            if risk_scores[shorter] == risk_scores[longer]:
-                tied_risk += 1
-                concordant += 0.5
-            elif risk_scores[shorter] > risk_scores[longer]:
-                concordant += 1
+    concordant = 0.0
+    for k in event_idx:
+        # Rows m that k (which failed) is comparable-and-earlier-than:
+        # time[k] < time[m], OR m is censored (matches the original exactly).
+        comparable = (time[k] < time) | censored
+        comparable[k] = False  # never pair a row with itself
+        r_m = risk[comparable]
+        if r_m.size == 0:
+            continue
+        permissible += r_m.size
+        concordant += float(np.count_nonzero(risk[k] > r_m))
+        concordant += 0.5 * float(np.count_nonzero(risk[k] == r_m))
 
     if permissible == 0:
         return None

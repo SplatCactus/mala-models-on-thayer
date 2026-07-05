@@ -44,6 +44,7 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
+from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 
@@ -133,6 +134,15 @@ class SHAPRunner:
 
     def __init__(self, random_state: int = 42):
         self.random_state = random_state
+        # Median-impute missing features (e.g. *_trajectory_slope is NaN for
+        # patients with <2 pre-index BP readings -- no definable OLS slope) so
+        # the linear model never sees a NaN. keep_empty_features=True and NO
+        # add_indicator on purpose: the exact-Shapley attribution in _attribute
+        # zips model.coef_ 1:1 with ALL_MODEL_FEATURES, so the imputed matrix
+        # must have exactly those columns in that order -- add_indicator would
+        # append extra columns and desync that mapping. (classifier.py can use
+        # add_indicator because its sklearn Pipeline doesn't do this alignment.)
+        self.imputer = SimpleImputer(strategy="median", keep_empty_features=True)
         self.scaler = StandardScaler()
         self.model = LogisticRegression(max_iter=1000, random_state=random_state)
         self._fitted = False
@@ -158,7 +168,8 @@ class SHAPRunner:
         polarity in silently inverts every downstream routing decision.
         """
         X = X[ALL_MODEL_FEATURES]
-        X_scaled = self.scaler.fit_transform(X)
+        X_imputed = self.imputer.fit_transform(X)
+        X_scaled = self.scaler.fit_transform(X_imputed)
         self.model.fit(X_scaled, y)
         self._feature_means = X_scaled.mean(axis=0)
         self._fitted = True
@@ -180,7 +191,8 @@ class SHAPRunner:
             raise RuntimeError("SHAPRunner.fit() must be called before explain_patient().")
 
         x = patient_row[ALL_MODEL_FEATURES].to_frame().T
-        x_scaled = self.scaler.transform(x)[0]
+        x_imputed = self.imputer.transform(x)
+        x_scaled = self.scaler.transform(x_imputed)[0]
 
         raw_attrib = self._attribute(x_scaled)
         predicted_risk = float(self.model.predict_proba(x_scaled.reshape(1, -1))[0, 1])
