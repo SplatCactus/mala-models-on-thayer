@@ -107,6 +107,7 @@ def _to_dashboard_view(payload: dict) -> dict:
             "outreach_script_es": card["script"]["es"]["rationale"],
             "requires_human_review": card["requires_human_review"],
             "is_safety_override": card["is_safety_override"],
+            "priority_score": card["priority_score"],
         })
 
     return {
@@ -152,3 +153,4 @@ def get_patient(patient_id: str):
 @app.get("/health")
 def health():
     return {"status": "ok", "source": str(WORKLIST_PATH.relative_to(ROOT))}
+    
