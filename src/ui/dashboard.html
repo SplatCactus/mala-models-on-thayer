@@ -132,6 +132,31 @@
   .action-pharmacist { background: var(--pharmacist-bg); color: var(--pharmacist-text); }
   .action-social_worker { background: var(--social-bg); color: var(--social-text); }
   .action-chw_call { background: var(--chw-bg); color: var(--chw-text); }
+  .badges { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+  .badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+  .badge-safety { background: #fbe3e3; color: #9b1c1c; }
+  .badge-review { background: #fff2d4; color: #8a5340; }
+  .priority-cell { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .priority-index { font-weight: 600; }
+  .priority-bar-wrap {
+    width: 56px;
+    height: 5px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 4px;
+  }
+  .priority-bar-fill { height: 100%; background: var(--social); }
+  tr.safety-row td { background: #fef6f5; }
+  tr.safety-row:hover td { background: #fdece9; }
   .expand-btn {
     background: none;
     border: 1px solid var(--border);
@@ -210,11 +235,14 @@ const STRINGS = {
     showing: "Showing",
     patients: "patients",
     colPatient: "Patient",
+    colPriority: "Priority",
     colBreakWindow: "Predicted break window",
     colRisk: "Risk",
     colDriver: "Top driver",
     colAction: "Routed to",
     colScript: "Script",
+    badgeSafety: "Safety override",
+    badgeReview: "Human review",
     viewScript: "View script",
     hideScript: "Hide",
     outreachScript: "Outreach script",
@@ -239,11 +267,14 @@ const STRINGS = {
     showing: "Mostrando",
     patients: "pacientes",
     colPatient: "Paciente",
+    colPriority: "Prioridad",
     colBreakWindow: "Ventana prevista de interrupción",
     colRisk: "Riesgo",
     colDriver: "Factor principal",
     colAction: "Enviado a",
     colScript: "Guion",
+    badgeSafety: "Anulación de seguridad",
+    badgeReview: "Revisión humana",
     viewScript: "Ver guion",
     hideScript: "Ocultar",
     outreachScript: "Guion de contacto",
@@ -361,17 +392,35 @@ function render() {
     return 0;
   });
 
+  // Normalize priority_score to a 0-100 index relative to the top-priority
+  // patient in the current view (raw scores are urgency*modifiability and
+  // very small in absolute terms, so a relative index reads far better).
+  const maxPriority = Math.max(...sorted.map(p => p.priority_score || 0), 0);
+
   const rows = sorted.map(p => {
     const driverLabel = currentLang === "es" ? p.driver_label_es : p.driver_label_en;
     const script = currentLang === "es" ? p.outreach_script_es : p.outreach_script_en;
     const isExpanded = expandedId === p.patient_id;
     const langBadge = p.preferred_language === "es" ? "ES" : "EN";
 
+    const priorityIndex = maxPriority > 0 ? Math.round((p.priority_score / maxPriority) * 100) : 0;
+    const badges = [];
+    if (p.is_safety_override) badges.push(`<span class="badge badge-safety">${s.badgeSafety}</span>`);
+    // requires_human_review co-occurs with a safety override; only show it on
+    // its own when it's flagged without the override badge already covering it.
+    if (p.requires_human_review && !p.is_safety_override) badges.push(`<span class="badge badge-review">${s.badgeReview}</span>`);
+    const badgesHtml = badges.length ? `<div class="badges">${badges.join("")}</div>` : "";
+
     return `
-      <tr>
+      <tr class="${p.is_safety_override ? "safety-row" : ""}">
         <td>
           <span class="patient-name">${p.display_name}</span>
           <span class="lang-badge">${langBadge}</span>
+          ${badgesHtml}
+        </td>
+        <td class="priority-cell">
+          <span class="priority-index">${priorityIndex}</span>
+          <div class="priority-bar-wrap"><div class="priority-bar-fill" style="width:${priorityIndex}%"></div></div>
         </td>
         <td class="break-window">${formatDateRange(p.break_window_start, p.break_window_end)}</td>
         <td>
@@ -383,7 +432,7 @@ function render() {
         <td><button class="expand-btn" onclick="toggleScript('${p.patient_id}')">${isExpanded ? s.hideScript : s.viewScript}</button></td>
       </tr>
       <tr class="script-row ${isExpanded ? "" : "hidden"}">
-        <td colspan="6">
+        <td colspan="7">
           <div class="script-label">${s.outreachScript}</div>
           ${script}
           <div class="sms-nudge">
@@ -399,6 +448,7 @@ function render() {
       <thead>
         <tr>
           <th onclick="sortBy('display_name')">${s.colPatient}</th>
+          <th onclick="sortBy('priority_score')">${s.colPriority}</th>
           <th onclick="sortBy('break_window_start')">${s.colBreakWindow}</th>
           <th onclick="sortBy('risk_score')">${s.colRisk}</th>
           <th>${s.colDriver}</th>

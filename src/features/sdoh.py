@@ -41,6 +41,24 @@ import pandas as pd
 # Default master-flag column name.
 SDOH_ANY_FLAG = "flag_sdoh_any"
 
+# Stricter criteria for safety-critical composites. The plain rule ("any one
+# matching code, ever, before index") is right for ordinary SDOH barriers, but
+# wrong for a flag that drives a hard, never-capped human-review SAFETY OVERRIDE
+# (rules.py -> routing_table.yaml safety_overrides): the trauma SNOMED codes
+# (IPV / environmental violence) are recorded as routine SDOH *screening*
+# findings at wellness visits in this Synthea dataset and hit ~57% of patients,
+# so a single historical checkbox must not force an override. For flags listed
+# here we instead require a RECURRING and RECENT signal: at least
+# ``min_distinct_dates`` distinct finding dates, with the most recent within
+# ``recency_days`` before index. Empirically this takes trauma prevalence from
+# ~56.7% to ~5.3% of the cohort -- a plausible IPV/violence rate. Keys are
+# composite_flags group names; any group not listed keeps the plain rule.
+# NOTE: this tightens flag_trauma_exposure for BOTH the model feature and the
+# safety override, since they read the same column.
+DEFAULT_STRICT_FLAG_RULES: dict[str, dict] = {
+    "trauma_exposure": {"min_distinct_dates": 2, "recency_days": 365},
+}
+
 
 def _to_naive_datetime(series: pd.Series) -> pd.Series:
     """Parse ISO date/datetime strings to tz-naive pandas Timestamps (NaT on failure)."""
@@ -95,6 +113,7 @@ def compute_sdoh_flags(
     barrier_flags: list[str] | None = None,
     flag_prefix: str = "flag_",
     any_flag_name: str = SDOH_ANY_FLAG,
+    strict_flag_rules: dict[str, dict] | None = None,
 ) -> pd.DataFrame:
     """Build binary SDOH barrier flags per cohort patient, leakage-safe.
 
@@ -138,6 +157,9 @@ def compute_sdoh_flags(
     -----
     Pure function: no I/O, inputs not mutated.
     """
+    if strict_flag_rules is None:
+        strict_flag_rules = DEFAULT_STRICT_FLAG_RULES
+
     groups = extract_sdoh_barrier_groups(code_dictionary, barrier_flags)
     flag_names = {group: f"{flag_prefix}{group}" for group in groups}
 
@@ -169,10 +191,27 @@ def compute_sdoh_flags(
         # Strictly-prior leakage rule. NaT comparisons are False -> dropped.
         obs = obs[obs["_date"] < obs["_index_date"]]
 
-        # For each grouping, mark patients who carry any of its codes.
+        # For each grouping, mark the qualifying patients. Ordinary barriers
+        # use the plain "any matching code, ever (pre-index)" rule; groups in
+        # strict_flag_rules require a recurring + recent signal instead.
         out = out.set_index(cohort_patient_col)
         for group, codes in groups.items():
-            patients_hit = obs.loc[obs["_code"].isin(codes), obs_patient_col].unique()
+            grp_obs = obs.loc[obs["_code"].isin(codes)]
+            rule = strict_flag_rules.get(group)
+            if rule and not grp_obs.empty:
+                per_patient = grp_obs.groupby(obs_patient_col).agg(
+                    _n_dates=("_date", "nunique"),
+                    _most_recent=("_date", "max"),
+                    _index_date=("_index_date", "first"),
+                )
+                qualifies = per_patient["_n_dates"] >= rule.get("min_distinct_dates", 1)
+                recency_days = rule.get("recency_days")
+                if recency_days is not None:
+                    days_since = (per_patient["_index_date"] - per_patient["_most_recent"]).dt.days
+                    qualifies &= days_since <= recency_days
+                patients_hit = per_patient.index[qualifies]
+            else:
+                patients_hit = grp_obs[obs_patient_col].unique()
             if len(patients_hit):
                 out.loc[out.index.intersection(patients_hit), flag_names[group]] = 1
         out = out.reset_index()

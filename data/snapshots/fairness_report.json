@@ -3,28 +3,28 @@
     {
       "group": "hispanic",
       "eligible_n": 2232,
-      "capped_n": 1359,
-      "selection_rate": 0.6089
+      "capped_n": 146,
+      "selection_rate": 0.0654
     },
     {
       "group": "nonhispanic",
       "eligible_n": 13973,
-      "capped_n": 7914,
-      "selection_rate": 0.5664
+      "capped_n": 796,
+      "selection_rate": 0.057
     }
   ],
-  "min_max_disparity_ratio": 0.9302,
+  "min_max_disparity_ratio": 0.8709,
   "flags_disparate_impact_80pct_rule": false,
   "action_distribution_by_group": {
     "hispanic": {
-      "social_worker": 0.972,
-      "chw_call": 0.0243,
-      "pharmacist": 0.0037
+      "social_worker": 0.7671,
+      "chw_call": 0.1781,
+      "pharmacist": 0.0548
     },
     "nonhispanic": {
-      "social_worker": 0.9934,
-      "pharmacist": 0.0044,
-      "chw_call": 0.0021
+      "social_worker": 0.9296,
+      "pharmacist": 0.0402,
+      "chw_call": 0.0302
     }
   },
   "calibration_by_group": {
@@ -32,8 +32,8 @@
       "group": "overall",
       "n": 16205,
       "n_events": 2356,
-      "c_index": 0.6168,
-      "auc": 0.5842,
+      "c_index": 0.6046,
+      "auc": 0.571,
       "reliable": true
     },
     "by_group": [
@@ -41,16 +41,16 @@
         "group": "hispanic",
         "n": 2232,
         "n_events": 333,
-        "c_index": 0.6333,
-        "auc": 0.6013,
+        "c_index": 0.6193,
+        "auc": 0.5861,
         "reliable": true
       },
       {
         "group": "nonhispanic",
         "n": 13973,
         "n_events": 2023,
-        "c_index": 0.6142,
-        "auc": 0.5816,
+        "c_index": 0.602,
+        "auc": 0.5684,
         "reliable": true
       }
     ]

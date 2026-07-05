@@ -183,6 +183,70 @@ def test_sdoh_flag_property_no_leakage_across_many_patients():
 
 
 # ---------------------------------------------------------------------------
+# SDOH strict safety-flag rule (sdoh.py): trauma_exposure must require a
+# RECURRING + RECENT signal, not a single historical screening finding, so a
+# hard safety override doesn't fire on ~57% of the cohort (Synthea records the
+# trauma SNOMED codes as routine SDOH screening at wellness visits).
+# ---------------------------------------------------------------------------
+
+CODE_DICT_TRAUMA = {
+    "composite_flags": {
+        "trauma_exposure": {
+            "routing_action": "safety_screened_chw_call",
+            "codes": ["706893006", "424393004"],
+        }
+    }
+}
+
+
+def _trauma_conditions(rows: list[tuple[str, str]]) -> pd.DataFrame:
+    """rows = list of (code, START-date) for a single patient p1."""
+    return pd.DataFrame({"PATIENT": ["p1"] * len(rows),
+                         "CODE": [c for c, _ in rows],
+                         "START": [d for _, d in rows]})
+
+
+def test_trauma_single_finding_does_not_trigger():
+    """One pre-index screening finding is below the recurrence threshold -> 0."""
+    cohort = _cohort("p1", "2025-06-01")
+    conditions = _trauma_conditions([("706893006", "2025-03-01")])
+    out = compute_sdoh_flags(cohort, conditions, CODE_DICT_TRAUMA, date_col="START")
+    assert out.iloc[0]["flag_trauma_exposure"] == 0
+
+
+def test_trauma_recurring_and_recent_triggers():
+    """>=2 distinct dates, most recent within 365d before index -> 1."""
+    cohort = _cohort("p1", "2025-06-01")
+    conditions = _trauma_conditions([("706893006", "2025-01-10"), ("424393004", "2025-05-01")])
+    out = compute_sdoh_flags(cohort, conditions, CODE_DICT_TRAUMA, date_col="START")
+    assert out.iloc[0]["flag_trauma_exposure"] == 1
+
+
+def test_trauma_recurring_but_stale_does_not_trigger():
+    """Two distinct findings but both >365d before index -> 0 (fails recency)."""
+    cohort = _cohort("p1", "2025-06-01")
+    conditions = _trauma_conditions([("706893006", "2020-01-10"), ("424393004", "2021-02-01")])
+    out = compute_sdoh_flags(cohort, conditions, CODE_DICT_TRAUMA, date_col="START")
+    assert out.iloc[0]["flag_trauma_exposure"] == 0
+
+
+def test_trauma_two_codes_same_day_is_one_date():
+    """Distinct *codes* on the same day are one distinct date -> below threshold -> 0."""
+    cohort = _cohort("p1", "2025-06-01")
+    conditions = _trauma_conditions([("706893006", "2025-05-01"), ("424393004", "2025-05-01")])
+    out = compute_sdoh_flags(cohort, conditions, CODE_DICT_TRAUMA, date_col="START")
+    assert out.iloc[0]["flag_trauma_exposure"] == 0
+
+
+def test_trauma_strict_rule_still_respects_leakage():
+    """Recurring + recent, but all findings on/after index -> dropped -> 0."""
+    cohort = _cohort("p1", "2025-06-01")
+    conditions = _trauma_conditions([("706893006", "2025-06-01"), ("424393004", "2025-06-15")])
+    out = compute_sdoh_flags(cohort, conditions, CODE_DICT_TRAUMA, date_col="START")
+    assert out.iloc[0]["flag_trauma_exposure"] == 0
+
+
+# ---------------------------------------------------------------------------
 # PDC outcome (pdc.py): the flip side -- pre-index fills must not count
 # toward the forward-looking coverage window.
 # ---------------------------------------------------------------------------

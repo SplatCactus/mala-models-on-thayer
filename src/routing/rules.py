@@ -141,7 +141,14 @@ class RoutingRuleEngine:
         self, profile: PatientDriverProfile
     ) -> Optional[RoutingDecision]:
         for override_driver, cfg in self.safety_overrides.items():
-            value = profile.driver_attributions.get(override_driver, 0.0)
+            # BUG FIX 2026-07-04: gate on the patient's ACTUAL data, not the
+            # signed SHAP attribution. driver_attributions[override_driver] is
+            # coef*(x-mean); with a negative learned coefficient its sign is
+            # positive for every patient WITHOUT the flag, which fired the
+            # trauma override on ~57% of the cohort. A hard clinical safety
+            # override must trigger on the documented condition itself --
+            # driver_data_value() reads the raw flag value (>0 == present).
+            value = profile.driver_data_value(override_driver)
             if value > 0:
                 return RoutingDecision(
                     patient_id=profile.patient_id,
