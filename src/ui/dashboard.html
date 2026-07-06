@@ -4,215 +4,538 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BP Cascade RI — CHW worklist</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,500;0,600;0,700;0,800;1,500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #f7f6f3;
+    /* ── Neutrals: warm cream + tan bones ─────────────────────── */
+    --bg: #faf6f0;
     --card: #ffffff;
-    --border: #e2e0da;
-    --text-primary: #1f1e1c;
-    --text-secondary: #6b6a64;
-    --text-muted: #9a9890;
-    --radius: 10px;
-    --pharmacist: #534ab7;
-    --pharmacist-bg: #eeedfe;
-    --pharmacist-text: #3c3489;
-    --social: #d85a30;
-    --social-bg: #faece7;
-    --social-text: #712b13;
-    --chw: #1d9e75;
-    --chw-bg: #e1f5ee;
-    --chw-text: #085041;
-    --sms: #4a6cf7;
-    --sms-bg: #eef1ff;
+    --card-warm: #fffdf9;
+    --border: #ece4d6;
+    --border-strong: #ddd2be;
+    --tan: #c8a87c;
+    --tan-soft: #f4ecdf;
+    --text-primary: #231d15;
+    --text-secondary: #6d6455;
+    --text-muted: #a2977f;
+    --radius: 16px;
+    --radius-lg: 24px;
+
+    /* ── Vibrant accents (validated: CVD-safe, ≥3:1 on surface) ── */
+    --mango: #d2720a;
+    --mango-bright: #f2994a;
+    --salmon: #e4585f;
+    --salmon-bright: #f4867f;
+    --aqua: #0fa391;
+    --aqua-bright: #2cc9b4;
+
+    /* ── Routing actions (kept variable names) ────────────────── */
+    --pharmacist: #0fa391;
+    --pharmacist-bg: #e4f6f2;
+    --pharmacist-text: #075e52;
+    --social: #e4585f;
+    --social-bg: #fdecea;
+    --social-text: #93242e;
+    --chw: #d2720a;
+    --chw-bg: #fcefdc;
+    --chw-text: #7a4206;
+    --sms: #0fa391;
+    --sms-bg: #e9f8f4;
+
+    --font-display: "Poppins", "Satoshi", -apple-system, sans-serif;
+    --font-ui: "Satoshi", "Poppins", -apple-system, "Segoe UI", sans-serif;
+
+    --shadow-sm: 0 1px 2px rgba(60, 42, 18, 0.06), 0 2px 8px rgba(60, 42, 18, 0.05);
+    --shadow-md: 0 2px 6px rgba(60, 42, 18, 0.07), 0 10px 28px rgba(60, 42, 18, 0.08);
+    --shadow-lg: 0 4px 12px rgba(60, 42, 18, 0.06), 0 24px 60px rgba(60, 42, 18, 0.10);
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   }
   * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
   body {
     margin: 0;
-    font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-family: var(--font-ui);
     background: var(--bg);
     color: var(--text-primary);
-    padding: 2rem 1.5rem;
+    padding: 0 0 4rem;
+    -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 980px; margin: 0 auto; }
-  header {
+  /* Warm ambient glow — alive, not garish */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(640px 420px at 10% -6%, rgba(242, 153, 74, 0.16), transparent 62%),
+      radial-gradient(720px 480px at 92% -4%, rgba(44, 201, 180, 0.13), transparent 62%),
+      radial-gradient(900px 620px at 50% 112%, rgba(244, 134, 127, 0.10), transparent 65%);
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 1.5rem; }
+
+  /* ═══════════════════ NAV / BRANDING ═══════════════════ */
+  .topnav {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: rgba(250, 246, 240, 0.82);
+    backdrop-filter: blur(14px) saturate(1.4);
+    -webkit-backdrop-filter: blur(14px) saturate(1.4);
+    border-bottom: 1px solid rgba(221, 210, 190, 0.55);
+  }
+  .topnav-inner {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 14px 1.5rem;
     display: flex;
+    align-items: center;
     justify-content: space-between;
-    align-items: flex-end;
-    flex-wrap: wrap;
     gap: 1rem;
-    margin-bottom: 1.5rem;
   }
-  h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
-  .subtitle { font-size: 13px; color: var(--text-secondary); margin: 0; }
-  .controls { display: flex; gap: 8px; align-items: center; }
+  .brand { display: flex; align-items: center; gap: 13px; text-decoration: none; user-select: none; }
+  .brand-mark {
+    width: 44px;
+    height: 44px;
+    flex: none;
+    filter: drop-shadow(0 4px 10px rgba(226, 106, 60, 0.35));
+    transform: rotate(-4deg);
+    transition: transform 0.4s var(--ease-out);
+  }
+  .brand:hover .brand-mark { transform: rotate(4deg) scale(1.06); }
+  .brand-text { display: flex; flex-direction: column; line-height: 1.05; }
+  .brand-name {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 21px;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .brand-name .cascade {
+    background: linear-gradient(100deg, var(--mango-bright), var(--salmon));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .brand-name .ri-chip {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: #fff;
+    background: linear-gradient(135deg, var(--aqua-bright), var(--aqua));
+    padding: 3px 8px 2px;
+    border-radius: 7px;
+    transform: rotate(2deg);
+    box-shadow: 0 2px 6px rgba(15, 163, 145, 0.35);
+  }
+  .brand-tag {
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--text-muted);
+    letter-spacing: 0.02em;
+    margin-top: 2px;
+  }
+  .brand-tag b { color: var(--tan); font-weight: 700; }
+
+  /* ── EN/ES toggle: a real, physical control ── */
   .lang-toggle {
     display: flex;
+    gap: 4px;
+    padding: 4px;
+    background: var(--tan-soft);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    overflow: hidden;
+    border-radius: 12px;
+    box-shadow: inset 0 1px 3px rgba(60, 42, 18, 0.08);
   }
   .lang-toggle button {
     border: none;
-    background: var(--card);
-    padding: 6px 14px;
+    background: transparent;
+    font-family: var(--font-display);
+    font-weight: 700;
     font-size: 13px;
+    letter-spacing: 0.04em;
+    padding: 7px 16px;
+    border-radius: 9px;
     cursor: pointer;
     color: var(--text-secondary);
+    transition: all 0.22s var(--ease-out);
   }
+  .lang-toggle button:hover:not(.active) { color: var(--text-primary); background: rgba(255, 255, 255, 0.65); }
+  .lang-toggle button:active { transform: scale(0.94); }
   .lang-toggle button.active {
     background: var(--text-primary);
-    color: white;
+    color: #fff;
+    box-shadow: 0 2px 5px rgba(35, 29, 21, 0.35), 0 1px 0 rgba(255, 255, 255, 0.15) inset;
   }
+
+  /* ═══════════════════ HERO ═══════════════════ */
+  .hero {
+    text-align: center;
+    padding: 3.4rem 1rem 0.6rem;
+  }
+  .hero h1 {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: clamp(2.1rem, 4.6vw, 3.3rem);
+    letter-spacing: -0.03em;
+    margin: 0 0 0.55rem;
+    color: var(--text-primary);
+  }
+  .hero .subtitle {
+    font-size: clamp(0.98rem, 1.6vw, 1.12rem);
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin: 0 auto;
+    max-width: 46em;
+    line-height: 1.5;
+  }
+  .hero-underline {
+    width: 76px;
+    height: 5px;
+    margin: 1.15rem auto 0;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--mango-bright), var(--salmon), var(--aqua-bright));
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(26px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .hero-in h1 { animation: rise 0.75s var(--ease-out) both; }
+  .hero-in .subtitle { animation: rise 0.75s 0.10s var(--ease-out) both; }
+  .hero-in .hero-underline { animation: rise 0.75s 0.18s var(--ease-out) both; }
+
+  /* ═══════════════════ META STATS ═══════════════════ */
   .meta-bar {
     display: flex;
-    gap: 16px;
-    font-size: 13px;
-    color: var(--text-secondary);
-    margin-bottom: 1rem;
+    justify-content: center;
+    gap: 14px;
     flex-wrap: wrap;
+    margin: 1.9rem 0 1.6rem;
   }
-  .meta-bar b { color: var(--text-primary); }
+  .stat-chip {
+    display: flex;
+    align-items: baseline;
+    gap: 9px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 11px 20px;
+    box-shadow: var(--shadow-sm);
+  }
+  .stat-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--text-muted);
+  }
+  .stat-value {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 22px;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .stat-suffix { font-size: 12.5px; font-weight: 500; color: var(--text-secondary); }
+
+  /* ═══════════════════ WORKLIST BOARD ═══════════════════ */
+  .board {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+  }
+  .board-scroll { overflow-x: auto; }
   table {
     width: 100%;
     border-collapse: collapse;
-    background: var(--card);
-    border-radius: var(--radius);
-    overflow: hidden;
-    border: 1px solid var(--border);
-    font-size: 14px;
+    font-size: 14.5px;
+    min-width: 860px;
   }
   th, td {
     text-align: left;
-    padding: 12px 14px;
+    padding: 15px 16px;
     border-bottom: 1px solid var(--border);
     vertical-align: top;
   }
-  th {
+  th:first-child, td:first-child { padding-left: 26px; }
+  th:last-child, td:last-child { padding-right: 26px; }
+  thead th {
+    position: sticky;
+    top: 0;
+    background: linear-gradient(180deg, var(--card-warm), #fdf9f1);
+    font-family: var(--font-ui);
     font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.09em;
     color: var(--text-muted);
-    font-weight: 600;
-    cursor: pointer;
+    font-weight: 700;
     user-select: none;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--border-strong);
   }
-  th:hover { color: var(--text-primary); }
+  th.sortable { cursor: pointer; transition: color 0.18s ease, background 0.18s ease; }
+  th.sortable:hover { color: var(--text-primary); background: var(--tan-soft); }
+  th.sortable:active .sort-arrow { transform: translateY(1px); }
+  th.sorted { color: var(--text-primary); }
+  .sort-arrow {
+    display: inline-block;
+    margin-left: 5px;
+    font-size: 11px;
+    color: var(--mango);
+    transition: transform 0.18s ease;
+  }
+  .sort-arrow.idle { color: var(--border-strong); }
+  tbody tr { transition: background 0.16s ease; }
   tr:last-child td { border-bottom: none; }
-  tr:hover td { background: #fafaf8; }
-  .patient-name { font-weight: 600; }
+  tbody tr.patient-row:hover td { background: #fdf8ef; }
+  .patient-name { font-weight: 700; font-size: 15px; letter-spacing: -0.01em; }
   .lang-badge {
     display: inline-block;
     font-size: 10px;
-    padding: 1px 6px;
-    border-radius: 4px;
-    background: var(--bg);
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    padding: 2px 7px;
+    border-radius: 6px;
+    background: var(--tan-soft);
+    border: 1px solid var(--border);
     color: var(--text-secondary);
-    margin-left: 6px;
-    font-weight: 500;
+    margin-left: 7px;
+    vertical-align: 1px;
   }
-  .break-window { white-space: nowrap; font-variant-numeric: tabular-nums; }
-  .risk-bar-wrap {
-    width: 60px;
-    height: 5px;
-    background: var(--border);
-    border-radius: 3px;
+  .break-window { white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 500; }
+
+  /* Meters — thin, rounded, gradient fills */
+  .risk-bar-wrap, .priority-bar-wrap {
+    width: 68px;
+    height: 6px;
+    background: var(--tan-soft);
+    border-radius: 4px;
     overflow: hidden;
-    margin-top: 4px;
+    margin-top: 6px;
   }
-  .risk-bar-fill { height: 100%; background: var(--text-primary); }
-  .driver-label { font-size: 13px; }
+  .risk-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: linear-gradient(90deg, var(--mango-bright), var(--salmon));
+  }
+  .priority-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: linear-gradient(90deg, var(--aqua-bright), var(--aqua));
+  }
+  .risk-value, .priority-index { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .priority-cell { white-space: nowrap; }
+  .driver-label { font-size: 13.5px; color: var(--text-secondary); line-height: 1.45; }
+
+  /* Action pills — color-coded routing */
   .action-pill {
-    display: inline-block;
-    font-size: 12px;
-    font-weight: 600;
-    padding: 3px 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    padding: 5px 13px;
     border-radius: 999px;
     white-space: nowrap;
+    border: 1.5px solid transparent;
   }
-  .action-pharmacist { background: var(--pharmacist-bg); color: var(--pharmacist-text); }
-  .action-social_worker { background: var(--social-bg); color: var(--social-text); }
-  .action-chw_call { background: var(--chw-bg); color: var(--chw-text); }
-  .badges { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+  .action-pill::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex: none;
+  }
+  .action-pharmacist { background: var(--pharmacist-bg); color: var(--pharmacist-text); border-color: rgba(15, 163, 145, 0.28); }
+  .action-pharmacist::before { background: var(--pharmacist); }
+  .action-social_worker { background: var(--social-bg); color: var(--social-text); border-color: rgba(228, 88, 95, 0.28); }
+  .action-social_worker::before { background: var(--social); }
+  .action-chw_call { background: var(--chw-bg); color: var(--chw-text); border-color: rgba(210, 114, 10, 0.28); }
+  .action-chw_call::before { background: var(--chw); }
+
+  .badges { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 7px; }
   .badge {
     display: inline-block;
     font-size: 10px;
-    font-weight: 700;
-    padding: 2px 7px;
-    border-radius: 4px;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 6px;
     text-transform: uppercase;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.04em;
   }
-  .badge-safety { background: #fbe3e3; color: #9b1c1c; }
-  .badge-review { background: #fff2d4; color: #8a5340; }
-  .priority-cell { font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .priority-index { font-weight: 600; }
-  .priority-bar-wrap {
-    width: 56px;
-    height: 5px;
-    background: var(--border);
-    border-radius: 3px;
-    overflow: hidden;
+  .badge-safety { background: #fbe0e0; color: #9b1c1c; border: 1px solid #f3c3c3; }
+  .badge-review { background: #fdf0d3; color: #8a5340; border: 1px solid #f0dcae; }
+  tr.safety-row td { background: #fdf3f1; }
+  tr.safety-row td:first-child { box-shadow: inset 3px 0 0 var(--salmon); }
+  tr.safety-row:hover td { background: #fcebe7; }
+
+  /* Expand button — tactile */
+  .expand-btn {
+    font-family: var(--font-ui);
+    font-weight: 700;
+    font-size: 12.5px;
+    padding: 7px 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    background: var(--card);
+    border: 1px solid var(--border-strong);
+    color: var(--text-secondary);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, var(--shadow-sm);
+    transition: all 0.18s var(--ease-out);
+    white-space: nowrap;
+  }
+  .expand-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--tan);
+    transform: translateY(-1px);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, var(--shadow-md);
+  }
+  .expand-btn:active { transform: translateY(1px) scale(0.97); box-shadow: inset 0 2px 4px rgba(60, 42, 18, 0.12); }
+  .expand-btn.open {
+    background: var(--text-primary);
+    border-color: var(--text-primary);
+    color: #fff;
+    box-shadow: 0 2px 6px rgba(35, 29, 21, 0.3);
+  }
+
+  /* Script drawer */
+  .script-row.hidden { display: none; }
+  .script-row td { background: var(--card-warm); padding: 0 26px 22px; border-bottom: 1px solid var(--border); }
+  @keyframes drawerIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .script-panel {
+    animation: drawerIn 0.35s var(--ease-out) both;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 20px;
+    box-shadow: var(--shadow-sm);
+    font-size: 13.5px;
+    line-height: 1.65;
+    color: var(--text-secondary);
     margin-top: 4px;
   }
-  .priority-bar-fill { height: 100%; background: var(--social); }
-  tr.safety-row td { background: #fef6f5; }
-  tr.safety-row:hover td { background: #fdece9; }
-  .expand-btn {
-    background: none;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    font-size: 12px;
-    padding: 4px 10px;
-    cursor: pointer;
-    color: var(--text-secondary);
+  .script-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--mango);
+    margin-bottom: 7px;
+    font-weight: 800;
   }
-  .expand-btn:hover { background: var(--bg); }
-  .script-row td {
-    background: #fafaf8;
-    padding: 14px 18px;
-    font-size: 13px;
-    line-height: 1.6;
-    color: var(--text-secondary);
-    border-bottom: 1px solid var(--border);
-  }
-  .script-row.hidden { display: none; }
-  .script-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin-bottom: 4px; font-weight: 600; }
-  .status-line { font-size: 13px; color: var(--text-muted); padding: 2rem 0; text-align: center; }
-  .legend { display: flex; gap: 16px; margin-top: 1rem; font-size: 12px; color: var(--text-secondary); flex-wrap: wrap; }
-  .legend-item { display: flex; align-items: center; gap: 6px; }
-  .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
   .sms-nudge {
-    margin-top: 12px;
-    padding: 10px 14px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 14px;
+    padding: 12px 15px;
     background: var(--sms-bg);
-    border-left: 3px solid var(--sms);
-    border-radius: 4px;
+    border: 1px dashed rgba(15, 163, 145, 0.4);
+    border-radius: 11px;
     font-size: 13px;
     color: var(--text-primary);
   }
-  .sms-nudge .sms-icon { margin-right: 4px; }
+  .sms-nudge .sms-icon { font-size: 16px; line-height: 1.3; }
+  .sms-nudge strong { color: var(--pharmacist-text); }
+
+  /* Status / loading */
+  .status-line { font-size: 14px; color: var(--text-muted); padding: 3.2rem 0; text-align: center; font-weight: 500; }
+  @keyframes pulseDot { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
+  .loading-dots span {
+    display: inline-block;
+    width: 7px; height: 7px;
+    margin: 0 3px;
+    border-radius: 50%;
+    background: var(--mango-bright);
+    animation: pulseDot 1.1s ease-in-out infinite;
+  }
+  .loading-dots span:nth-child(2) { background: var(--salmon); animation-delay: 0.18s; }
+  .loading-dots span:nth-child(3) { background: var(--aqua-bright); animation-delay: 0.36s; }
+
+  /* Legend */
+  .legend { display: flex; justify-content: center; gap: 12px; margin-top: 1.6rem; flex-wrap: wrap; }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 6px 14px;
+    box-shadow: var(--shadow-sm);
+  }
+  .legend-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+
+  @media (max-width: 640px) {
+    .topnav-inner { padding: 10px 1rem; }
+    .brand-tag { display: none; }
+    .hero { padding-top: 2.2rem; }
+    .wrap { padding: 0 0.9rem; }
+    th:first-child, td:first-child { padding-left: 16px; }
+    th:last-child, td:last-child { padding-right: 16px; }
+  }
 </style>
 </head>
 <body>
-<div class="wrap">
 
-  <header>
-    <div>
-      <h1 id="title">CHW worklist</h1>
-      <p class="subtitle" id="subtitle">Patients at risk of a medication persistence break, ranked by urgency</p>
-    </div>
+<nav class="topnav">
+  <div class="topnav-inner">
+    <a class="brand" href="#">
+      <svg class="brand-mark" viewBox="0 0 48 48" aria-hidden="true">
+        <defs>
+          <linearGradient id="markGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#f2994a"/>
+            <stop offset="60%" stop-color="#e4585f"/>
+            <stop offset="100%" stop-color="#d64550"/>
+          </linearGradient>
+        </defs>
+        <rect x="2" y="2" width="44" height="44" rx="14" fill="url(#markGrad)"/>
+        <!-- cascade steps -->
+        <path d="M9 13 h8 v6 h6 v6 h6 v6 h10" fill="none" stroke="rgba(255,255,255,0.38)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <!-- heartbeat pulse -->
+        <path d="M7 30 h9 l3.5 -9 l6 16 l3.5 -7 h12" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="brand-text">
+        <span class="brand-name">BP&nbsp;<span class="cascade">Cascade</span><span class="ri-chip">RI</span></span>
+        <span class="brand-tag">by <b>Team Mala</b> · Rhode Island</span>
+      </span>
+    </a>
     <div class="controls">
-      <div class="lang-toggle">
+      <div class="lang-toggle" role="group" aria-label="Language">
         <button id="btn-en" class="active" onclick="setLang('en')">EN</button>
         <button id="btn-es" onclick="setLang('es')">ES</button>
       </div>
     </div>
-  </header>
+  </div>
+</nav>
+
+<header class="hero" id="hero">
+  <h1 id="title">CHW worklist</h1>
+  <p class="subtitle" id="subtitle">Patients at risk of a medication persistence break, ranked by urgency</p>
+  <div class="hero-underline"></div>
+</header>
+
+<div class="wrap">
 
   <div class="meta-bar" id="meta-bar"></div>
 
   <div id="content">
-    <p class="status-line">Loading worklist…</p>
+    <p class="status-line">Loading worklist…<br><br><span class="loading-dots"><span></span><span></span><span></span></span></p>
   </div>
 
   <div class="legend">
@@ -299,11 +622,19 @@ let sortKey = "break_window_start";
 let sortAsc = true;
 let expandedId = null;
 
+function playHero() {
+  const hero = document.getElementById("hero");
+  hero.classList.remove("hero-in");
+  void hero.offsetWidth; // force reflow so the animation retriggers
+  hero.classList.add("hero-in");
+}
+
 function setLang(lang) {
   currentLang = lang;
   document.getElementById("btn-en").classList.toggle("active", lang === "en");
   document.getElementById("btn-es").classList.toggle("active", lang === "es");
   render();
+  playHero();
 }
 
 function actionLabel(action) {
@@ -360,11 +691,17 @@ async function loadWorklist() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     worklistData = await res.json();
     render();
+    playHero();
   } catch (err) {
     const s = STRINGS[currentLang];
     document.getElementById("content").innerHTML =
       `<p class="status-line">${s.error}<br><span style="font-size:11px">${err.message}</span></p>`;
   }
+}
+
+function sortIndicator(key) {
+  if (sortKey === key) return `<span class="sort-arrow">${sortAsc ? "↑" : "↓"}</span>`;
+  return `<span class="sort-arrow idle">↕</span>`;
 }
 
 function render() {
@@ -378,9 +715,9 @@ function render() {
   if (!worklistData) return;
 
   document.getElementById("meta-bar").innerHTML = `
-    <span>${s.cohort}: <b>${worklistData.cohort_size}</b></span>
-    <span>${s.capacity}: <b>${worklistData.capacity}</b></span>
-    <span>${s.showing} <b>${worklistData.worklist.length}</b> ${s.patients}</span>
+    <div class="stat-chip"><span class="stat-label">${s.cohort}</span><span class="stat-value">${worklistData.cohort_size}</span></div>
+    <div class="stat-chip"><span class="stat-label">${s.capacity}</span><span class="stat-value">${worklistData.capacity}</span></div>
+    <div class="stat-chip"><span class="stat-label">${s.showing}</span><span class="stat-value">${worklistData.worklist.length}</span><span class="stat-suffix">${s.patients}</span></div>
   `;
 
   const sorted = [...worklistData.worklist].sort((a, b) => {
@@ -412,7 +749,7 @@ function render() {
     const badgesHtml = badges.length ? `<div class="badges">${badges.join("")}</div>` : "";
 
     return `
-      <tr class="${p.is_safety_override ? "safety-row" : ""}">
+      <tr class="patient-row ${p.is_safety_override ? "safety-row" : ""}">
         <td>
           <span class="patient-name">${p.display_name}</span>
           <span class="lang-badge">${langBadge}</span>
@@ -424,19 +761,21 @@ function render() {
         </td>
         <td class="break-window">${formatDateRange(p.break_window_start, p.break_window_end)}</td>
         <td>
-          ${Math.round(p.risk_score * 100)}%
+          <span class="risk-value">${Math.round(p.risk_score * 100)}%</span>
           <div class="risk-bar-wrap"><div class="risk-bar-fill" style="width:${Math.round(p.risk_score * 100)}%"></div></div>
         </td>
         <td class="driver-label">${driverLabel}</td>
         <td><span class="action-pill action-${p.routed_action}">${actionLabel(p.routed_action)}</span></td>
-        <td><button class="expand-btn" onclick="toggleScript('${p.patient_id}')">${isExpanded ? s.hideScript : s.viewScript}</button></td>
+        <td><button class="expand-btn ${isExpanded ? "open" : ""}" onclick="toggleScript('${p.patient_id}')">${isExpanded ? s.hideScript : s.viewScript}</button></td>
       </tr>
       <tr class="script-row ${isExpanded ? "" : "hidden"}">
         <td colspan="7">
-          <div class="script-label">${s.outreachScript}</div>
-          ${script}
-          <div class="sms-nudge">
-            <span class="sms-icon">📱</span><strong>${s.smsLabel}</strong> — ${buildSmsLine(p)}
+          <div class="script-panel">
+            <div class="script-label">${s.outreachScript}</div>
+            ${script}
+            <div class="sms-nudge">
+              <span class="sms-icon">📱</span><span><strong>${s.smsLabel}</strong> — ${buildSmsLine(p)}</span>
+            </div>
           </div>
         </td>
       </tr>
@@ -444,23 +783,28 @@ function render() {
   }).join("");
 
   document.getElementById("content").innerHTML = `
-    <table>
-      <thead>
-        <tr>
-          <th onclick="sortBy('display_name')">${s.colPatient}</th>
-          <th onclick="sortBy('priority_score')">${s.colPriority}</th>
-          <th onclick="sortBy('break_window_start')">${s.colBreakWindow}</th>
-          <th onclick="sortBy('risk_score')">${s.colRisk}</th>
-          <th>${s.colDriver}</th>
-          <th>${s.colAction}</th>
-          <th>${s.colScript}</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
+    <div class="board">
+      <div class="board-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th class="sortable ${sortKey === "display_name" ? "sorted" : ""}" onclick="sortBy('display_name')">${s.colPatient}${sortIndicator("display_name")}</th>
+              <th class="sortable ${sortKey === "priority_score" ? "sorted" : ""}" onclick="sortBy('priority_score')">${s.colPriority}${sortIndicator("priority_score")}</th>
+              <th class="sortable ${sortKey === "break_window_start" ? "sorted" : ""}" onclick="sortBy('break_window_start')">${s.colBreakWindow}${sortIndicator("break_window_start")}</th>
+              <th class="sortable ${sortKey === "risk_score" ? "sorted" : ""}" onclick="sortBy('risk_score')">${s.colRisk}${sortIndicator("risk_score")}</th>
+              <th>${s.colDriver}</th>
+              <th>${s.colAction}</th>
+              <th>${s.colScript}</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
   `;
 }
 
+playHero();
 loadWorklist();
 </script>
 </body>
