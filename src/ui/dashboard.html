@@ -1057,26 +1057,13 @@ const filters = {
   actions: new Set(ALL_ACTIONS)
 };
 
-/* ── Hero animation: replays on load, language toggle, and every
-      re-entry into the viewport (IntersectionObserver below) ── */
+/* ── Hero animation: plays on initial load and language toggle only ── */
 function playHero() {
   const hero = document.getElementById("hero");
   hero.classList.remove("hero-in");
   void hero.offsetWidth; // force reflow so the animation retriggers
   hero.classList.add("hero-in");
 }
-
-let heroWasOut = false;
-new IntersectionObserver(entries => {
-  entries.forEach(entry => {
-    if (entry.isIntersecting && heroWasOut) {
-      heroWasOut = false;
-      playHero();
-    } else if (!entry.isIntersecting) {
-      heroWasOut = true;
-    }
-  });
-}, { threshold: 0.3 }).observe(document.getElementById("hero"));
 
 /* ── Scroll-reactive background: expose scroll progress as --sp ── */
 let scrollTicking = false;
