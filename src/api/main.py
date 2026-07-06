@@ -94,7 +94,7 @@ def _to_dashboard_view(payload: dict) -> dict:
 
         rows.append({
             "patient_id": card["patient_id"],
-            "display_name": f"Patient #{card['patient_id']}",
+            "display_name": f"Patient #{card['patient_id'][:8]}",
             "preferred_language": "en",
             "break_window_start": start.isoformat(),
             "break_window_end": end.isoformat(),
