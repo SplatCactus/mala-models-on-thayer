@@ -1,0 +1,17 @@
+# BP Cascade RI — dependencies
+# Generated for RI-AI4H Data Challenge 2026 submission (reproducibility)
+#
+# To regenerate exact pinned versions from your working environment, run:
+#   ./venv/bin/pip freeze > requirements-lock.txt
+# and commit that alongside this file. This file lists the direct
+# dependencies with minimum tested versions; requirements-lock.txt (if
+# present) is the exact, reproducible environment.
+
+polars>=0.20
+pyarrow>=14.0
+fastapi>=0.128
+uvicorn>=0.39
+pandas>=2.0
+pyyaml>=6.0
+scikit-learn>=1.4
+shap>=0.45
