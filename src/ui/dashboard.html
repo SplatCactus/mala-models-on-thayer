@@ -52,6 +52,11 @@
     --shadow-md: 0 2px 6px rgba(60, 42, 18, 0.07), 0 10px 28px rgba(60, 42, 18, 0.08);
     --shadow-lg: 0 4px 12px rgba(60, 42, 18, 0.06), 0 24px 60px rgba(60, 42, 18, 0.10);
     --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-spring: cubic-bezier(0.34, 1.4, 0.44, 1);
+    --ease-glide: cubic-bezier(0.4, 0, 0.2, 1);
+
+    --nav-h: 74px;
+    --sp: 0; /* scroll progress 0→1, set from JS */
   }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
@@ -60,10 +65,11 @@
     font-family: var(--font-ui);
     background: var(--bg);
     color: var(--text-primary);
-    padding: 0 0 4rem;
+    padding: 0 0 5rem;
     -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
   }
-  /* Warm ambient glow — alive, not garish */
+  /* Scroll-reactive ambient gradient — blob anchors drift with --sp */
   body::before {
     content: "";
     position: fixed;
@@ -71,11 +77,18 @@
     z-index: -1;
     pointer-events: none;
     background:
-      radial-gradient(640px 420px at 10% -6%, rgba(242, 153, 74, 0.16), transparent 62%),
-      radial-gradient(720px 480px at 92% -4%, rgba(44, 201, 180, 0.13), transparent 62%),
-      radial-gradient(900px 620px at 50% 112%, rgba(244, 134, 127, 0.10), transparent 65%);
+      radial-gradient(640px 420px at calc(10% + var(--sp) * 22%) calc(-6% + var(--sp) * 34%), rgba(242, 153, 74, 0.17), transparent 62%),
+      radial-gradient(720px 480px at calc(92% - var(--sp) * 18%) calc(-4% + var(--sp) * 44%), rgba(44, 201, 180, 0.14), transparent 62%),
+      radial-gradient(900px 620px at 50% calc(112% - var(--sp) * 36%), rgba(244, 134, 127, 0.11), transparent 65%),
+      radial-gradient(520px 380px at calc(-8% + var(--sp) * 30%) calc(70% - var(--sp) * 20%), rgba(200, 168, 124, 0.10), transparent 60%);
   }
-  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 1.5rem; }
+  .wrap { max-width: 1400px; margin: 0 auto; padding: 0 2rem; }
+
+  :focus-visible {
+    outline: 3px solid rgba(242, 153, 74, 0.55);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
 
   /* ═══════════════════ NAV / BRANDING ═══════════════════ */
   .topnav {
@@ -88,9 +101,9 @@
     border-bottom: 1px solid rgba(221, 210, 190, 0.55);
   }
   .topnav-inner {
-    max-width: 1080px;
+    max-width: 1400px;
     margin: 0 auto;
-    padding: 14px 1.5rem;
+    padding: 14px 2rem;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -103,9 +116,9 @@
     flex: none;
     filter: drop-shadow(0 4px 10px rgba(226, 106, 60, 0.35));
     transform: rotate(-4deg);
-    transition: transform 0.4s var(--ease-out);
+    transition: transform 0.45s var(--ease-spring);
   }
-  .brand:hover .brand-mark { transform: rotate(4deg) scale(1.06); }
+  .brand:hover .brand-mark { transform: rotate(4deg) scale(1.08); }
   .brand-text { display: flex; flex-direction: column; line-height: 1.05; }
   .brand-name {
     font-family: var(--font-display);
@@ -115,7 +128,7 @@
     color: var(--text-primary);
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 8px;
   }
   .brand-name .cascade {
     background: linear-gradient(100deg, var(--mango-bright), var(--salmon));
@@ -133,7 +146,9 @@
     border-radius: 7px;
     transform: rotate(2deg);
     box-shadow: 0 2px 6px rgba(15, 163, 145, 0.35);
+    transition: transform 0.35s var(--ease-spring);
   }
+  .brand:hover .ri-chip { transform: rotate(-2deg) scale(1.08); }
   .brand-tag {
     font-size: 11.5px;
     font-weight: 500;
@@ -164,10 +179,10 @@
     border-radius: 9px;
     cursor: pointer;
     color: var(--text-secondary);
-    transition: all 0.22s var(--ease-out);
+    transition: all 0.25s var(--ease-spring);
   }
-  .lang-toggle button:hover:not(.active) { color: var(--text-primary); background: rgba(255, 255, 255, 0.65); }
-  .lang-toggle button:active { transform: scale(0.94); }
+  .lang-toggle button:hover:not(.active) { color: var(--text-primary); background: rgba(255, 255, 255, 0.75); transform: translateY(-1px); }
+  .lang-toggle button:active { transform: scale(0.92); }
   .lang-toggle button.active {
     background: var(--text-primary);
     color: #fff;
@@ -177,15 +192,44 @@
   /* ═══════════════════ HERO ═══════════════════ */
   .hero {
     text-align: center;
-    padding: 3.4rem 1rem 0.6rem;
+    padding: 3.8rem 1rem 0.8rem;
   }
-  .hero h1 {
+  /* Glossy display title: gradient-white fill, crisp dark outline behind the
+     fill (paint-order), depth via stacked drop-shadows so the gloss stays
+     clean over the transparent fill. */
+  .hero-title {
+    margin: 0 0 1.1rem;
+    display: flex;
+    justify-content: center;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.34em;
     font-family: var(--font-display);
     font-weight: 800;
-    font-size: clamp(2.1rem, 4.6vw, 3.3rem);
-    letter-spacing: -0.03em;
-    margin: 0 0 0.55rem;
-    color: var(--text-primary);
+    font-size: clamp(2.7rem, 6.5vw, 4.6rem);
+    letter-spacing: -0.015em;
+    line-height: 1.06;
+    filter:
+      drop-shadow(0 3px 0 rgba(35, 29, 21, 0.82))
+      drop-shadow(0 14px 30px rgba(60, 42, 18, 0.22))
+      drop-shadow(0 24px 60px rgba(226, 106, 60, 0.20));
+  }
+  .ht-word {
+    background: linear-gradient(180deg, #ffffff 0%, #ffffff 44%, #ffedd8 55%, #fff8f0 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    -webkit-text-stroke: 2.2px #241a10;
+    paint-order: stroke fill;
+  }
+  .hero-kicker {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(1.05rem, 1.9vw, 1.35rem);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--mango);
+    margin: 0 0 0.6rem;
   }
   .hero .subtitle {
     font-size: clamp(0.98rem, 1.6vw, 1.12rem);
@@ -193,12 +237,12 @@
     color: var(--text-secondary);
     margin: 0 auto;
     max-width: 46em;
-    line-height: 1.5;
+    line-height: 1.55;
   }
   .hero-underline {
-    width: 76px;
+    width: 84px;
     height: 5px;
-    margin: 1.15rem auto 0;
+    margin: 1.25rem auto 0;
     border-radius: 3px;
     background: linear-gradient(90deg, var(--mango-bright), var(--salmon), var(--aqua-bright));
   }
@@ -206,9 +250,20 @@
     from { opacity: 0; transform: translateY(26px); }
     to   { opacity: 1; transform: translateY(0); }
   }
-  .hero-in h1 { animation: rise 0.75s var(--ease-out) both; }
-  .hero-in .subtitle { animation: rise 0.75s 0.10s var(--ease-out) both; }
-  .hero-in .hero-underline { animation: rise 0.75s 0.18s var(--ease-out) both; }
+  @keyframes titleIn {
+    from { opacity: 0; transform: translateY(34px) scale(0.94); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes underlineIn {
+    from { opacity: 0; transform: scaleX(0.2); }
+    to   { opacity: 1; transform: scaleX(1); }
+  }
+  .hero-in .ht-word { animation: titleIn 0.8s var(--ease-out) both; }
+  .hero-in .ht-word:nth-child(2) { animation-delay: 0.08s; }
+  .hero-in .ht-word:nth-child(3) { animation-delay: 0.16s; }
+  .hero-in .hero-kicker { animation: rise 0.75s 0.20s var(--ease-out) both; }
+  .hero-in .subtitle { animation: rise 0.75s 0.28s var(--ease-out) both; }
+  .hero-in .hero-underline { animation: underlineIn 0.7s 0.38s var(--ease-out) both; }
 
   /* ═══════════════════ META STATS ═══════════════════ */
   .meta-bar {
@@ -216,18 +271,20 @@
     justify-content: center;
     gap: 14px;
     flex-wrap: wrap;
-    margin: 1.9rem 0 1.6rem;
+    margin: 2.2rem 0 1.8rem;
   }
   .stat-chip {
     display: flex;
     align-items: baseline;
-    gap: 9px;
+    gap: 10px;
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: 14px;
-    padding: 11px 20px;
+    padding: 12px 22px;
     box-shadow: var(--shadow-sm);
+    transition: transform 0.3s var(--ease-spring), box-shadow 0.3s var(--ease-glide);
   }
+  .stat-chip:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
   .stat-label {
     font-size: 11px;
     font-weight: 700;
@@ -245,58 +302,304 @@
   }
   .stat-suffix { font-size: 12.5px; font-weight: 500; color: var(--text-secondary); }
 
+  /* ═══════════════════ TOOLBAR: legend + search + filters ═══════════════════ */
+  .toolbar {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    padding: 20px 26px 22px;
+    margin-bottom: 1.6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    opacity: 0;
+    transform: translateY(14px);
+    transition: opacity 0.6s var(--ease-out), transform 0.6s var(--ease-out);
+  }
+  .toolbar.ready { opacity: 1; transform: translateY(0); }
+
+  .legend-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .legend-head { display: flex; align-items: baseline; gap: 10px; }
+  .legend-title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.01em;
+    color: var(--text-primary);
+  }
+  .legend-hint { font-size: 11.5px; font-weight: 500; color: var(--text-muted); letter-spacing: 0.02em; }
+  .legend { display: flex; gap: 10px; flex-wrap: wrap; }
+  .legend-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    background: var(--card-warm);
+    border: 1.5px solid var(--border-strong);
+    border-radius: 999px;
+    padding: 8px 16px;
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    transition: all 0.28s var(--ease-spring);
+  }
+  .legend-chip:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+  .legend-chip:active { transform: scale(0.94); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; transition: transform 0.3s var(--ease-spring); }
+  .legend-chip:hover .legend-dot { transform: scale(1.3); }
+  .legend-chip .chip-check {
+    width: 13px; height: 13px; flex: none;
+    color: var(--aqua);
+    transform: scale(1);
+    transition: transform 0.3s var(--ease-spring), opacity 0.2s ease;
+  }
+  .legend-chip:not(.active) { background: transparent; border-color: var(--border); box-shadow: none; opacity: 0.5; filter: saturate(0.35); }
+  .legend-chip:not(.active) .chip-check { transform: scale(0); opacity: 0; }
+  .legend-chip:not(.active):hover { opacity: 0.8; transform: translateY(-1px); }
+  .match-count {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--pharmacist-text);
+    background: var(--sms-bg);
+    border: 1px solid rgba(15, 163, 145, 0.3);
+    border-radius: 999px;
+    padding: 7px 16px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    transition: transform 0.3s var(--ease-spring);
+  }
+  .match-count.bump { animation: bump 0.4s var(--ease-spring); }
+  @keyframes bump { 40% { transform: scale(1.09); } }
+
+  .controls-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 16px;
+    flex-wrap: wrap;
+    border-top: 1px solid var(--border);
+    padding-top: 18px;
+  }
+  .field-label {
+    display: block;
+    font-size: 10.5px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--text-muted);
+    margin-bottom: 7px;
+  }
+
+  .search-box { position: relative; flex: 2 1 240px; min-width: 220px; }
+  .search-box .search-icon {
+    position: absolute;
+    left: 14px;
+    bottom: 12px;
+    width: 17px; height: 17px;
+    color: var(--text-muted);
+    pointer-events: none;
+    transition: color 0.25s ease, transform 0.3s var(--ease-spring);
+  }
+  .search-box:focus-within .search-icon { color: var(--mango); transform: scale(1.12); }
+  .search-box input {
+    width: 100%;
+    font-family: var(--font-ui);
+    font-size: 14.5px;
+    font-weight: 500;
+    color: var(--text-primary);
+    background: var(--card-warm);
+    border: 1.5px solid var(--border-strong);
+    border-radius: 12px;
+    padding: 11px 14px 11px 40px;
+    transition: border-color 0.25s ease, box-shadow 0.25s var(--ease-glide), background 0.25s ease;
+  }
+  .search-box input::placeholder { color: var(--text-muted); font-weight: 500; }
+  .search-box input:hover { border-color: var(--tan); }
+  .search-box input:focus {
+    outline: none;
+    background: var(--card);
+    border-color: var(--mango-bright);
+    box-shadow: 0 0 0 4px rgba(242, 153, 74, 0.16), var(--shadow-sm);
+  }
+
+  .filter-dates { flex: 0 1 auto; }
+  .date-pair { display: flex; align-items: center; gap: 8px; }
+  .date-pair .date-sep { color: var(--text-muted); font-weight: 700; }
+  .date-pair input[type="date"] {
+    font-family: var(--font-ui);
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--text-primary);
+    background: var(--card-warm);
+    border: 1.5px solid var(--border-strong);
+    border-radius: 12px;
+    padding: 10px 12px;
+    width: 148px;
+    transition: border-color 0.25s ease, box-shadow 0.25s var(--ease-glide);
+  }
+  .date-pair input[type="date"]:hover { border-color: var(--tan); }
+  .date-pair input[type="date"]:focus {
+    outline: none;
+    border-color: var(--mango-bright);
+    box-shadow: 0 0 0 4px rgba(242, 153, 74, 0.16);
+  }
+
+  .filter-risk { flex: 1 1 190px; min-width: 180px; max-width: 280px; }
+  .risk-slider-row { display: flex; align-items: center; gap: 12px; }
+  .risk-readout {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+    min-width: 52px;
+    text-align: right;
+  }
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: 1;
+    height: 8px;
+    border-radius: 6px;
+    background: linear-gradient(90deg, var(--mango-bright) 0 var(--fill, 0%), var(--tan-soft) var(--fill, 0%));
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: box-shadow 0.25s ease;
+  }
+  input[type="range"]:hover { box-shadow: 0 0 0 4px rgba(242, 153, 74, 0.10); }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #fff, #fdf3e6);
+    border: 2px solid var(--mango);
+    box-shadow: 0 2px 6px rgba(210, 114, 10, 0.35);
+    cursor: grab;
+    transition: transform 0.25s var(--ease-spring), box-shadow 0.25s ease;
+  }
+  input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.18); box-shadow: 0 3px 10px rgba(210, 114, 10, 0.45); }
+  input[type="range"]:active::-webkit-slider-thumb { cursor: grabbing; transform: scale(1.05); }
+  input[type="range"]::-moz-range-thumb {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid var(--mango);
+    box-shadow: 0 2px 6px rgba(210, 114, 10, 0.35);
+    cursor: grab;
+  }
+
+  .reset-btn {
+    font-family: var(--font-ui);
+    font-weight: 700;
+    font-size: 13px;
+    padding: 11px 18px;
+    border-radius: 12px;
+    cursor: pointer;
+    background: transparent;
+    border: 1.5px solid var(--border-strong);
+    color: var(--text-secondary);
+    transition: all 0.25s var(--ease-spring);
+    white-space: nowrap;
+  }
+  .reset-btn:hover { color: var(--salmon); border-color: var(--salmon-bright); background: var(--social-bg); transform: translateY(-1px); }
+  .reset-btn:active { transform: scale(0.94); }
+
   /* ═══════════════════ WORKLIST BOARD ═══════════════════ */
   .board {
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lg);
-    overflow: hidden;
   }
-  .board-scroll { overflow-x: auto; }
+  /* No overflow clipping on .board — it would break the sticky header. The
+     table always fits its container (fixed layout + wrapping), so the rounded
+     corners are applied to the corner cells instead. */
   table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 14.5px;
-    min-width: 860px;
+    table-layout: fixed;
+    font-size: 14px;
   }
+  /* Fixed-layout column proportions — sum to 100%, tuned per breakpoint so
+     every column stays visible with zero horizontal scroll in EN and ES. */
+  col.c-patient { width: 19%; }
+  col.c-priority { width: 8%; }
+  col.c-window { width: 13.5%; }
+  col.c-risk { width: 8.5%; }
+  col.c-driver { width: 25%; }
+  col.c-action { width: 14%; }
+  col.c-script { width: 12%; }
   th, td {
     text-align: left;
-    padding: 15px 16px;
+    padding: 16px 14px;
     border-bottom: 1px solid var(--border);
     vertical-align: top;
+    overflow-wrap: anywhere;
   }
   th:first-child, td:first-child { padding-left: 26px; }
   th:last-child, td:last-child { padding-right: 26px; }
   thead th {
     position: sticky;
-    top: 0;
+    top: var(--nav-h);
+    z-index: 5;
     background: linear-gradient(180deg, var(--card-warm), #fdf9f1);
     font-family: var(--font-ui);
     font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 0.09em;
+    letter-spacing: 0.08em;
     color: var(--text-muted);
     font-weight: 700;
+    line-height: 1.45;
     user-select: none;
-    white-space: nowrap;
+    vertical-align: bottom;
     border-bottom: 1px solid var(--border-strong);
   }
-  th.sortable { cursor: pointer; transition: color 0.18s ease, background 0.18s ease; }
+  thead th:first-child { border-top-left-radius: var(--radius-lg); }
+  thead th:last-child { border-top-right-radius: var(--radius-lg); }
+  tbody tr:last-child td:first-child { border-bottom-left-radius: var(--radius-lg); }
+  tbody tr:last-child td:last-child { border-bottom-right-radius: var(--radius-lg); }
+  th.sortable { cursor: pointer; transition: color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease; }
   th.sortable:hover { color: var(--text-primary); background: var(--tan-soft); }
-  th.sortable:active .sort-arrow { transform: translateY(1px); }
-  th.sorted { color: var(--text-primary); }
+  th.sortable:active .sort-arrow { transform: translateY(2px) scale(0.9); }
+  th.sorted { color: var(--text-primary); box-shadow: inset 0 -2px 0 var(--mango-bright); }
   .sort-arrow {
     display: inline-block;
     margin-left: 5px;
     font-size: 11px;
     color: var(--mango);
-    transition: transform 0.18s ease;
+    transition: transform 0.3s var(--ease-spring);
   }
+  th.sorted .sort-arrow { animation: bump 0.4s var(--ease-spring); }
   .sort-arrow.idle { color: var(--border-strong); }
-  tbody tr { transition: background 0.16s ease; }
   tr:last-child td { border-bottom: none; }
-  tbody tr.patient-row:hover td { background: #fdf8ef; }
+
+  /* Row entrance — full stagger on discrete renders (load, sort, language,
+     chip/date filters); a fast unstaggered fade while typing or dragging the
+     risk slider so continuous input never blanks the list. */
+  @keyframes rowIn {
+    from { opacity: 0; transform: translateY(9px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  tbody tr.patient-row { animation: rowIn 0.45s var(--ease-out) both; }
+  tbody.soft tr.patient-row { animation-duration: 0.2s; animation-delay: 0ms !important; }
+
+  /* Whole row is the click target */
+  tbody tr.patient-row { cursor: pointer; }
+  tbody tr.patient-row td { transition: background 0.22s ease, box-shadow 0.22s ease, border-color 0.3s ease; }
+  tbody tr.patient-row:hover td { background: #fdf7ec; }
+  tbody tr.patient-row:hover td:first-child { box-shadow: inset 3px 0 0 var(--mango-bright); }
+  tbody tr.patient-row:active td { background: #fbf1de; }
+  tbody tr.patient-row.open td { background: #fdf9f2; border-bottom-color: transparent; }
+
   .patient-name { font-weight: 700; font-size: 15px; letter-spacing: -0.01em; }
   .lang-badge {
     display: inline-block;
@@ -311,30 +614,36 @@
     margin-left: 7px;
     vertical-align: 1px;
   }
-  .break-window { white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 500; }
+  .break-window { font-variant-numeric: tabular-nums; font-weight: 500; }
 
   /* Meters — thin, rounded, gradient fills */
   .risk-bar-wrap, .priority-bar-wrap {
-    width: 68px;
+    width: 100%;
+    max-width: 74px;
     height: 6px;
     background: var(--tan-soft);
     border-radius: 4px;
     overflow: hidden;
-    margin-top: 6px;
+    margin-top: 7px;
   }
   .risk-bar-fill {
     height: 100%;
     border-radius: 4px;
     background: linear-gradient(90deg, var(--mango-bright), var(--salmon));
+    transform-origin: left;
+    animation: fillIn 0.8s 0.15s var(--ease-out) both;
   }
   .priority-bar-fill {
     height: 100%;
     border-radius: 4px;
     background: linear-gradient(90deg, var(--aqua-bright), var(--aqua));
+    transform-origin: left;
+    animation: fillIn 0.8s 0.15s var(--ease-out) both;
   }
+  @keyframes fillIn { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  tbody.soft .risk-bar-fill, tbody.soft .priority-bar-fill { animation: none; }
   .risk-value, .priority-index { font-weight: 700; font-variant-numeric: tabular-nums; }
-  .priority-cell { white-space: nowrap; }
-  .driver-label { font-size: 13.5px; color: var(--text-secondary); line-height: 1.45; }
+  .driver-label { font-size: 13.5px; color: var(--text-secondary); line-height: 1.5; }
 
   /* Action pills — color-coded routing */
   .action-pill {
@@ -346,9 +655,11 @@
     letter-spacing: 0.01em;
     padding: 5px 13px;
     border-radius: 999px;
-    white-space: nowrap;
+    line-height: 1.35;
     border: 1.5px solid transparent;
+    transition: transform 0.3s var(--ease-spring), box-shadow 0.3s ease;
   }
+  tr.patient-row:hover .action-pill { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
   .action-pill::before {
     content: "";
     width: 7px;
@@ -378,68 +689,86 @@
   tr.safety-row td { background: #fdf3f1; }
   tr.safety-row td:first-child { box-shadow: inset 3px 0 0 var(--salmon); }
   tr.safety-row:hover td { background: #fcebe7; }
+  tr.safety-row:hover td:first-child { box-shadow: inset 3px 0 0 var(--salmon); }
+  tr.safety-row.open td { background: #fdf0ed; }
 
   /* Expand button — tactile */
   .expand-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
     font-family: var(--font-ui);
     font-weight: 700;
     font-size: 12.5px;
-    padding: 7px 14px;
+    padding: 7px 13px;
     border-radius: 10px;
     cursor: pointer;
     background: var(--card);
     border: 1px solid var(--border-strong);
     color: var(--text-secondary);
     box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, var(--shadow-sm);
-    transition: all 0.18s var(--ease-out);
+    transition: all 0.22s var(--ease-spring);
     white-space: nowrap;
   }
+  .expand-btn .chev { transition: transform 0.35s var(--ease-spring); flex: none; }
   .expand-btn:hover {
     color: var(--text-primary);
     border-color: var(--tan);
     transform: translateY(-1px);
     box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, var(--shadow-md);
   }
-  .expand-btn:active { transform: translateY(1px) scale(0.97); box-shadow: inset 0 2px 4px rgba(60, 42, 18, 0.12); }
+  .expand-btn:hover .chev { transform: translateY(2px); }
+  .expand-btn:active { transform: translateY(1px) scale(0.95); box-shadow: inset 0 2px 4px rgba(60, 42, 18, 0.12); }
   .expand-btn.open {
     background: var(--text-primary);
     border-color: var(--text-primary);
     color: #fff;
     box-shadow: 0 2px 6px rgba(35, 29, 21, 0.3);
   }
+  .expand-btn.open .chev { transform: rotate(180deg); }
 
-  /* Script drawer */
-  .script-row.hidden { display: none; }
-  .script-row td { background: var(--card-warm); padding: 0 26px 22px; border-bottom: 1px solid var(--border); }
-  @keyframes drawerIn {
-    from { opacity: 0; transform: translateY(-8px); }
-    to   { opacity: 1; transform: translateY(0); }
+  /* Script drawer — animates open AND closed via grid-template-rows */
+  .script-row td { padding: 0 26px; border-bottom: none; background: var(--card-warm); transition: border-color 0.3s ease; }
+  .script-row.open td { border-bottom: 1px solid var(--border); }
+  .script-row:last-child td { border-bottom: none; }
+  .drawer {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.5s var(--ease-glide);
   }
+  .script-row.open .drawer { grid-template-rows: 1fr; }
+  .drawer-inner {
+    overflow: hidden;
+    min-height: 0;
+    opacity: 0;
+    transform: translateY(-6px);
+    transition: opacity 0.3s ease, transform 0.4s var(--ease-out);
+  }
+  .script-row.open .drawer-inner { opacity: 1; transform: translateY(0); transition-delay: 0.08s; }
   .script-panel {
-    animation: drawerIn 0.35s var(--ease-out) both;
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: 14px;
-    padding: 18px 20px;
+    padding: 20px 22px;
     box-shadow: var(--shadow-sm);
     font-size: 13.5px;
     line-height: 1.65;
     color: var(--text-secondary);
-    margin-top: 4px;
+    margin: 6px 0 22px;
   }
   .script-label {
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.09em;
     color: var(--mango);
-    margin-bottom: 7px;
+    margin-bottom: 8px;
     font-weight: 800;
   }
   .sms-nudge {
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    margin-top: 14px;
+    margin-top: 16px;
     padding: 12px 15px;
     background: var(--sms-bg);
     border: 1px dashed rgba(15, 163, 145, 0.4);
@@ -450,8 +779,8 @@
   .sms-nudge .sms-icon { font-size: 16px; line-height: 1.3; }
   .sms-nudge strong { color: var(--pharmacist-text); }
 
-  /* Status / loading */
-  .status-line { font-size: 14px; color: var(--text-muted); padding: 3.2rem 0; text-align: center; font-weight: 500; }
+  /* Status / loading / empty */
+  .status-line { font-size: 14px; color: var(--text-muted); padding: 3.4rem 0; text-align: center; font-weight: 500; }
   @keyframes pulseDot { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
   .loading-dots span {
     display: inline-block;
@@ -463,31 +792,55 @@
   }
   .loading-dots span:nth-child(2) { background: var(--salmon); animation-delay: 0.18s; }
   .loading-dots span:nth-child(3) { background: var(--aqua-bright); animation-delay: 0.36s; }
-
-  /* Legend */
-  .legend { display: flex; justify-content: center; gap: 12px; margin-top: 1.6rem; flex-wrap: wrap; }
-  .legend-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12.5px;
-    font-weight: 600;
-    color: var(--text-secondary);
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    padding: 6px 14px;
-    box-shadow: var(--shadow-sm);
+  .empty-state {
+    text-align: center;
+    padding: 4rem 1.5rem;
+    animation: rise 0.5s var(--ease-out) both;
   }
-  .legend-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .empty-state .empty-glyph { font-size: 34px; margin-bottom: 0.8rem; }
+  .empty-state h3 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 19px;
+    margin: 0 0 0.4rem;
+    color: var(--text-primary);
+  }
+  .empty-state p { margin: 0 0 1.4rem; color: var(--text-secondary); font-size: 14px; }
 
+  @media (max-width: 900px) {
+    .wrap, .topnav-inner { padding-left: 1.1rem; padding-right: 1.1rem; }
+    th, td { padding: 13px 8px; }
+    th:first-child, td:first-child { padding-left: 14px; }
+    th:last-child, td:last-child { padding-right: 14px; }
+    table { font-size: 12.5px; }
+    .patient-name { font-size: 13.5px; }
+    .driver-label { font-size: 12px; }
+    .action-pill { font-size: 11px; padding: 4px 8px; }
+    .expand-btn { font-size: 11px; padding: 6px 8px; }
+    .script-row td { padding: 0 14px; }
+    col.c-patient { width: 17.5%; }
+    col.c-priority { width: 7.5%; }
+    col.c-window { width: 13%; }
+    col.c-risk { width: 8%; }
+    col.c-driver { width: 22%; }
+    col.c-action { width: 16.5%; }
+    col.c-script { width: 15.5%; }
+  }
   @media (max-width: 640px) {
-    .topnav-inner { padding: 10px 1rem; }
+    .topnav-inner { padding-top: 10px; padding-bottom: 10px; }
     .brand-tag { display: none; }
-    .hero { padding-top: 2.2rem; }
-    .wrap { padding: 0 0.9rem; }
-    th:first-child, td:first-child { padding-left: 16px; }
-    th:last-child, td:last-child { padding-right: 16px; }
+    .hero { padding-top: 2.4rem; }
+    .toolbar { padding: 16px 16px 18px; }
+    .controls-row { gap: 12px; }
+    .date-pair input[type="date"] { width: 128px; }
+    .action-pill { font-size: 10.5px; padding: 3px 7px; gap: 5px; }
+    .action-pill::before { width: 5px; height: 5px; }
+    .expand-btn { white-space: normal; text-align: left; font-size: 10.5px; padding: 5px 7px; gap: 5px; }
+    .lang-badge { margin-left: 0; display: block; width: fit-content; margin-top: 4px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    html { scroll-behavior: auto; }
   }
 </style>
 </head>
@@ -511,7 +864,7 @@
         <path d="M7 30 h9 l3.5 -9 l6 16 l3.5 -7 h12" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
       <span class="brand-text">
-        <span class="brand-name">BP&nbsp;<span class="cascade">Cascade</span><span class="ri-chip">RI</span></span>
+        <span class="brand-name"><span>BP</span><span class="cascade">Cascade</span><span class="ri-chip">RI</span></span>
         <span class="brand-tag">by <b>Team Mala</b> · Rhode Island</span>
       </span>
     </a>
@@ -525,7 +878,10 @@
 </nav>
 
 <header class="hero" id="hero">
-  <h1 id="title">CHW worklist</h1>
+  <h1 class="hero-title" aria-label="BP Cascade RI">
+    <span class="ht-word">BP</span><span class="ht-word">Cascade</span><span class="ht-word">RI</span>
+  </h1>
+  <p class="hero-kicker" id="title">CHW worklist</p>
   <p class="subtitle" id="subtitle">Patients at risk of a medication persistence break, ranked by urgency</p>
   <div class="hero-underline"></div>
 </header>
@@ -534,14 +890,59 @@
 
   <div class="meta-bar" id="meta-bar"></div>
 
+  <section class="toolbar" id="toolbar" aria-label="Legend and filters">
+    <div class="legend-row">
+      <div class="legend-head">
+        <span class="legend-title" id="legend-title">Care routing</span>
+        <span class="legend-hint" id="legend-hint">click to filter</span>
+      </div>
+      <div class="legend" role="group" aria-label="Routed action filter">
+        <button class="legend-chip active" data-action="pharmacist" onclick="toggleAction(this)">
+          <span class="legend-dot" style="background:var(--pharmacist)"></span>
+          <span id="legend-pharmacist">Pharmacist</span>
+          <svg class="chip-check" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M2.5 7.5 L5.5 10.5 L11.5 3.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="legend-chip active" data-action="social_worker" onclick="toggleAction(this)">
+          <span class="legend-dot" style="background:var(--social)"></span>
+          <span id="legend-social">Social worker</span>
+          <svg class="chip-check" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M2.5 7.5 L5.5 10.5 L11.5 3.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="legend-chip active" data-action="chw_call" onclick="toggleAction(this)">
+          <span class="legend-dot" style="background:var(--chw)"></span>
+          <span id="legend-chw">CHW call</span>
+          <svg class="chip-check" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M2.5 7.5 L5.5 10.5 L11.5 3.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+      <span class="match-count" id="match-count"></span>
+    </div>
+
+    <div class="controls-row">
+      <div class="search-box">
+        <label class="field-label" for="search-input" id="lbl-search">Search</label>
+        <svg class="search-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.75" stroke="currentColor" stroke-width="2"/><path d="M13 13 L17.5 17.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <input id="search-input" type="search" autocomplete="off" placeholder="Search patients…">
+      </div>
+      <div class="filter-dates">
+        <span class="field-label" id="lbl-window">Break window</span>
+        <div class="date-pair">
+          <input type="date" id="date-from" aria-label="From">
+          <span class="date-sep">–</span>
+          <input type="date" id="date-to" aria-label="To">
+        </div>
+      </div>
+      <div class="filter-risk">
+        <label class="field-label" for="risk-slider" id="lbl-risk">Min risk</label>
+        <div class="risk-slider-row">
+          <input type="range" id="risk-slider" min="0" max="100" step="5" value="0">
+          <span class="risk-readout" id="risk-readout">≥ 0%</span>
+        </div>
+      </div>
+      <button class="reset-btn" id="clear-filters" onclick="resetFilters()">Reset</button>
+    </div>
+  </section>
+
   <div id="content">
     <p class="status-line">Loading worklist…<br><br><span class="loading-dots"><span></span><span></span><span></span></span></p>
-  </div>
-
-  <div class="legend">
-    <div class="legend-item"><span class="legend-dot" style="background:var(--pharmacist)"></span><span id="legend-pharmacist">Pharmacist</span></div>
-    <div class="legend-item"><span class="legend-dot" style="background:var(--social)"></span><span id="legend-social">Social worker</span></div>
-    <div class="legend-item"><span class="legend-dot" style="background:var(--chw)"></span><span id="legend-chw">CHW call</span></div>
   </div>
 
 </div>
@@ -580,7 +981,19 @@ const STRINGS = {
     smsLabel: "SMS nudge scheduled",
     smsLangEn: "English",
     smsLangEs: "Spanish",
-    smsDetail: (lang, date) => `sending in ${lang} on ${date} — mocked, not actually sent`
+    smsDetail: (lang, date) => `sending in ${lang} on ${date}`,
+    legendTitle: "Care routing",
+    legendHint: "click to filter",
+    searchLabel: "Search",
+    searchPlaceholder: "Search patients…",
+    filterWindow: "Break window",
+    filterFrom: "From",
+    filterTo: "To",
+    filterMinRisk: "Min risk",
+    clearFilters: "Reset",
+    matches: (n, total) => `${n} of ${total} match`,
+    emptyTitle: "No patients match",
+    emptyBody: "Try adjusting your search or filters."
   },
   es: {
     title: "Lista de trabajo CHW",
@@ -612,9 +1025,23 @@ const STRINGS = {
     smsLabel: "Recordatorio SMS programado",
     smsLangEn: "inglés",
     smsLangEs: "español",
-    smsDetail: (lang, date) => `se enviará en ${lang} el ${date} — simulado, no se envía realmente`
+    smsDetail: (lang, date) => `se enviará en ${lang} el ${date}`,
+    legendTitle: "Enrutamiento",
+    legendHint: "haz clic para filtrar",
+    searchLabel: "Buscar",
+    searchPlaceholder: "Buscar paciente…",
+    filterWindow: "Ventana de interrupción",
+    filterFrom: "Desde",
+    filterTo: "Hasta",
+    filterMinRisk: "Riesgo mín.",
+    clearFilters: "Restablecer",
+    matches: (n, total) => `${n} de ${total} coinciden`,
+    emptyTitle: "Ningún paciente coincide",
+    emptyBody: "Prueba a ajustar la búsqueda o los filtros."
   }
 };
+
+const ALL_ACTIONS = ["pharmacist", "social_worker", "chw_call"];
 
 let currentLang = "en";
 let worklistData = null;
@@ -622,12 +1049,49 @@ let sortKey = "break_window_start";
 let sortAsc = true;
 let expandedId = null;
 
+const filters = {
+  query: "",
+  dateFrom: "",   // ISO yyyy-mm-dd, matches break window by overlap
+  dateTo: "",
+  minRisk: 0,     // 0–100
+  actions: new Set(ALL_ACTIONS)
+};
+
+/* ── Hero animation: replays on load, language toggle, and every
+      re-entry into the viewport (IntersectionObserver below) ── */
 function playHero() {
   const hero = document.getElementById("hero");
   hero.classList.remove("hero-in");
   void hero.offsetWidth; // force reflow so the animation retriggers
   hero.classList.add("hero-in");
 }
+
+let heroWasOut = false;
+new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting && heroWasOut) {
+      heroWasOut = false;
+      playHero();
+    } else if (!entry.isIntersecting) {
+      heroWasOut = true;
+    }
+  });
+}, { threshold: 0.3 }).observe(document.getElementById("hero"));
+
+/* ── Scroll-reactive background: expose scroll progress as --sp ── */
+let scrollTicking = false;
+function updateScrollProgress() {
+  const max = document.documentElement.scrollHeight - window.innerHeight;
+  const p = max > 0 ? window.scrollY / max : 0;
+  document.documentElement.style.setProperty("--sp", p.toFixed(4));
+  scrollTicking = false;
+}
+window.addEventListener("scroll", () => {
+  if (!scrollTicking) {
+    scrollTicking = true;
+    requestAnimationFrame(updateScrollProgress);
+  }
+}, { passive: true });
 
 function setLang(lang) {
   currentLang = lang;
@@ -662,9 +1126,8 @@ function formatSingleDate(dateStr) {
 
 function buildSmsLine(p) {
   const s = STRINGS[currentLang];
-  // Mocked: nudge fires at the start of the predicted break window, in the
-  // patient's preferred language. No real SMS is sent — this is a UI stub
-  // for the "last-mile" story until a real provider is wired in.
+  // Nudge fires at the start of the predicted break window, in the
+  // patient's preferred language.
   const langName = p.preferred_language === "es" ? s.smsLangEs : s.smsLangEn;
   const date = formatSingleDate(p.break_window_start);
   return s.smsDetail(langName, date);
@@ -680,9 +1143,105 @@ function sortBy(key) {
   render();
 }
 
+/* ── Row expand: toggled in place (no re-render) so the drawer can
+      animate both open and closed ── */
 function toggleScript(patientId) {
-  expandedId = expandedId === patientId ? null : patientId;
+  const willOpen = expandedId !== patientId;
+  if (expandedId !== null) setRowOpen(expandedId, false);
+  expandedId = willOpen ? patientId : null;
+  if (willOpen) setRowOpen(patientId, true);
+}
+
+function setRowOpen(patientId, open) {
+  const sel = window.CSS && CSS.escape ? CSS.escape(String(patientId)) : patientId;
+  const row = document.querySelector(`tr.patient-row[data-id="${sel}"]`);
+  const drawer = document.querySelector(`tr.script-row[data-id="${sel}"]`);
+  if (!row || !drawer) return;
+  const s = STRINGS[currentLang];
+  row.classList.toggle("open", open);
+  drawer.classList.toggle("open", open);
+  const btn = row.querySelector(".expand-btn");
+  btn.classList.toggle("open", open);
+  btn.querySelector(".eb-label").textContent = open ? s.hideScript : s.viewScript;
+}
+
+/* ── Filters: all conditions AND together, applied to the fetched list ── */
+function applyFilters(list) {
+  const q = filters.query.trim().toLowerCase();
+  return list.filter(p => {
+    if (q && !p.display_name.toLowerCase().includes(q)) return false;
+    if (!filters.actions.has(p.routed_action)) return false;
+    if (p.risk_score * 100 < filters.minRisk) return false;
+    // Date range matches when it overlaps the predicted break window.
+    // ISO date strings compare correctly as plain strings.
+    if (filters.dateFrom && p.break_window_end < filters.dateFrom) return false;
+    if (filters.dateTo && p.break_window_start > filters.dateTo) return false;
+    return true;
+  });
+}
+
+function toggleAction(btn) {
+  const action = btn.dataset.action;
+  if (filters.actions.has(action)) {
+    filters.actions.delete(action);
+    btn.classList.remove("active");
+  } else {
+    filters.actions.add(action);
+    btn.classList.add("active");
+  }
   render();
+}
+
+function resetFilters() {
+  filters.query = "";
+  filters.dateFrom = "";
+  filters.dateTo = "";
+  filters.minRisk = 0;
+  filters.actions = new Set(ALL_ACTIONS);
+  document.getElementById("search-input").value = "";
+  document.getElementById("date-from").value = "";
+  document.getElementById("date-to").value = "";
+  const slider = document.getElementById("risk-slider");
+  slider.value = 0;
+  slider.style.setProperty("--fill", "0%");
+  document.querySelectorAll(".legend-chip").forEach(c => c.classList.add("active"));
+  render();
+}
+
+/* Coalesce rapid input events (typing, slider drags) into at most one
+   re-render per animation frame — keeps the 900+ row list feeling instant. */
+let renderQueued = false;
+function scheduleRender() {
+  if (renderQueued) return;
+  renderQueued = true;
+  const run = () => {
+    if (!renderQueued) return;
+    renderQueued = false;
+    render("soft");
+  };
+  requestAnimationFrame(run);
+  setTimeout(run, 40); // rAF can starve in hidden tabs — never drop a render
+}
+
+function initToolbar() {
+  document.getElementById("search-input").addEventListener("input", e => {
+    filters.query = e.target.value;
+    scheduleRender();
+  });
+  document.getElementById("date-from").addEventListener("change", e => {
+    filters.dateFrom = e.target.value;
+    render();
+  });
+  document.getElementById("date-to").addEventListener("change", e => {
+    filters.dateTo = e.target.value;
+    render();
+  });
+  const slider = document.getElementById("risk-slider");
+  slider.addEventListener("input", e => {
+    filters.minRisk = Number(e.target.value);
+    slider.style.setProperty("--fill", `${filters.minRisk}%`);
+    scheduleRender();
+  });
 }
 
 async function loadWorklist() {
@@ -690,6 +1249,7 @@ async function loadWorklist() {
     const res = await fetch(`${API_BASE}/worklist`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     worklistData = await res.json();
+    document.getElementById("toolbar").classList.add("ready");
     render();
     playHero();
   } catch (err) {
@@ -704,23 +1264,63 @@ function sortIndicator(key) {
   return `<span class="sort-arrow idle">↕</span>`;
 }
 
-function render() {
+function syncToolbarLabels(s) {
+  document.getElementById("legend-title").textContent = s.legendTitle;
+  document.getElementById("legend-hint").textContent = s.legendHint;
+  document.getElementById("lbl-search").textContent = s.searchLabel;
+  document.getElementById("search-input").placeholder = s.searchPlaceholder;
+  document.getElementById("lbl-window").textContent = s.filterWindow;
+  document.getElementById("date-from").setAttribute("aria-label", s.filterFrom);
+  document.getElementById("date-to").setAttribute("aria-label", s.filterTo);
+  document.getElementById("lbl-risk").textContent = s.filterMinRisk;
+  document.getElementById("risk-readout").textContent = `≥ ${filters.minRisk}%`;
+  document.getElementById("clear-filters").textContent = s.clearFilters;
+}
+
+function bumpMatchCount() {
+  const el = document.getElementById("match-count");
+  el.classList.remove("bump");
+  void el.offsetWidth;
+  el.classList.add("bump");
+}
+
+function render(mode = "full") {
   const s = STRINGS[currentLang];
   document.getElementById("title").textContent = s.title;
   document.getElementById("subtitle").textContent = s.subtitle;
   document.getElementById("legend-pharmacist").textContent = s.legendPharmacist;
   document.getElementById("legend-social").textContent = s.legendSocial;
   document.getElementById("legend-chw").textContent = s.legendChw;
+  syncToolbarLabels(s);
 
   if (!worklistData) return;
+
+  const filtered = applyFilters(worklistData.worklist);
+
+  document.getElementById("match-count").textContent = s.matches(filtered.length, worklistData.worklist.length);
+  bumpMatchCount();
 
   document.getElementById("meta-bar").innerHTML = `
     <div class="stat-chip"><span class="stat-label">${s.cohort}</span><span class="stat-value">${worklistData.cohort_size}</span></div>
     <div class="stat-chip"><span class="stat-label">${s.capacity}</span><span class="stat-value">${worklistData.capacity}</span></div>
-    <div class="stat-chip"><span class="stat-label">${s.showing}</span><span class="stat-value">${worklistData.worklist.length}</span><span class="stat-suffix">${s.patients}</span></div>
+    <div class="stat-chip"><span class="stat-label">${s.showing}</span><span class="stat-value">${filtered.length}</span><span class="stat-suffix">${s.patients}</span></div>
   `;
 
-  const sorted = [...worklistData.worklist].sort((a, b) => {
+  if (filtered.length === 0) {
+    document.getElementById("content").innerHTML = `
+      <div class="board">
+        <div class="empty-state">
+          <div class="empty-glyph">🔍</div>
+          <h3>${s.emptyTitle}</h3>
+          <p>${s.emptyBody}</p>
+          <button class="reset-btn" onclick="resetFilters()">${s.clearFilters}</button>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  const sorted = [...filtered].sort((a, b) => {
     let av = a[sortKey], bv = b[sortKey];
     if (typeof av === "string") av = av.toLowerCase();
     if (typeof bv === "string") bv = bv.toLowerCase();
@@ -734,11 +1334,12 @@ function render() {
   // very small in absolute terms, so a relative index reads far better).
   const maxPriority = Math.max(...sorted.map(p => p.priority_score || 0), 0);
 
-  const rows = sorted.map(p => {
+  const rows = sorted.map((p, i) => {
     const driverLabel = currentLang === "es" ? p.driver_label_es : p.driver_label_en;
     const script = currentLang === "es" ? p.outreach_script_es : p.outreach_script_en;
     const isExpanded = expandedId === p.patient_id;
     const langBadge = p.preferred_language === "es" ? "ES" : "EN";
+    const stagger = Math.min(i * 22, 380);
 
     const priorityIndex = maxPriority > 0 ? Math.round((p.priority_score / maxPriority) * 100) : 0;
     const badges = [];
@@ -749,7 +1350,10 @@ function render() {
     const badgesHtml = badges.length ? `<div class="badges">${badges.join("")}</div>` : "";
 
     return `
-      <tr class="patient-row ${p.is_safety_override ? "safety-row" : ""}">
+      <tr class="patient-row ${p.is_safety_override ? "safety-row" : ""} ${isExpanded ? "open" : ""}"
+          data-id="${p.patient_id}" style="animation-delay:${stagger}ms"
+          tabindex="0" onclick="toggleScript('${p.patient_id}')"
+          onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleScript('${p.patient_id}')}">
         <td>
           <span class="patient-name">${p.display_name}</span>
           <span class="lang-badge">${langBadge}</span>
@@ -766,17 +1370,24 @@ function render() {
         </td>
         <td class="driver-label">${driverLabel}</td>
         <td><span class="action-pill action-${p.routed_action}">${actionLabel(p.routed_action)}</span></td>
-        <td><button class="expand-btn ${isExpanded ? "open" : ""}" onclick="toggleScript('${p.patient_id}')">${isExpanded ? s.hideScript : s.viewScript}</button></td>
+        <td>
+          <button class="expand-btn ${isExpanded ? "open" : ""}" onclick="event.stopPropagation();toggleScript('${p.patient_id}')">
+            <span class="eb-label">${isExpanded ? s.hideScript : s.viewScript}</span>
+            <svg class="chev" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 3.5 L5 6.5 L8 3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </td>
       </tr>
-      <tr class="script-row ${isExpanded ? "" : "hidden"}">
+      <tr class="script-row ${isExpanded ? "open" : ""}" data-id="${p.patient_id}">
         <td colspan="7">
-          <div class="script-panel">
-            <div class="script-label">${s.outreachScript}</div>
-            ${script}
-            <div class="sms-nudge">
-              <span class="sms-icon">📱</span><span><strong>${s.smsLabel}</strong> — ${buildSmsLine(p)}</span>
+          <div class="drawer"><div class="drawer-inner">
+            <div class="script-panel">
+              <div class="script-label">${s.outreachScript}</div>
+              ${script}
+              <div class="sms-nudge">
+                <span class="sms-icon">📱</span><span><strong>${s.smsLabel}</strong> — ${buildSmsLine(p)}</span>
+              </div>
             </div>
-          </div>
+          </div></div>
         </td>
       </tr>
     `;
@@ -784,26 +1395,34 @@ function render() {
 
   document.getElementById("content").innerHTML = `
     <div class="board">
-      <div class="board-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th class="sortable ${sortKey === "display_name" ? "sorted" : ""}" onclick="sortBy('display_name')">${s.colPatient}${sortIndicator("display_name")}</th>
-              <th class="sortable ${sortKey === "priority_score" ? "sorted" : ""}" onclick="sortBy('priority_score')">${s.colPriority}${sortIndicator("priority_score")}</th>
-              <th class="sortable ${sortKey === "break_window_start" ? "sorted" : ""}" onclick="sortBy('break_window_start')">${s.colBreakWindow}${sortIndicator("break_window_start")}</th>
-              <th class="sortable ${sortKey === "risk_score" ? "sorted" : ""}" onclick="sortBy('risk_score')">${s.colRisk}${sortIndicator("risk_score")}</th>
-              <th>${s.colDriver}</th>
-              <th>${s.colAction}</th>
-              <th>${s.colScript}</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
+      <table>
+        <colgroup>
+          <col class="c-patient">
+          <col class="c-priority">
+          <col class="c-window">
+          <col class="c-risk">
+          <col class="c-driver">
+          <col class="c-action">
+          <col class="c-script">
+        </colgroup>
+        <thead>
+          <tr>
+            <th class="sortable ${sortKey === "display_name" ? "sorted" : ""}" onclick="sortBy('display_name')">${s.colPatient}${sortIndicator("display_name")}</th>
+            <th class="sortable ${sortKey === "priority_score" ? "sorted" : ""}" onclick="sortBy('priority_score')">${s.colPriority}${sortIndicator("priority_score")}</th>
+            <th class="sortable ${sortKey === "break_window_start" ? "sorted" : ""}" onclick="sortBy('break_window_start')">${s.colBreakWindow}${sortIndicator("break_window_start")}</th>
+            <th class="sortable ${sortKey === "risk_score" ? "sorted" : ""}" onclick="sortBy('risk_score')">${s.colRisk}${sortIndicator("risk_score")}</th>
+            <th>${s.colDriver}</th>
+            <th>${s.colAction}</th>
+            <th>${s.colScript}</th>
+          </tr>
+        </thead>
+        <tbody class="${mode === "soft" ? "soft" : ""}">${rows}</tbody>
+      </table>
     </div>
   `;
 }
 
+initToolbar();
 playHero();
 loadWorklist();
 </script>
