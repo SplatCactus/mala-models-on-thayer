@@ -52,7 +52,7 @@ the appropriate CHW/pharmacist/social-worker intervention (see
 - Cohort: 262 treated-hypertensive patients (`src/etl/cohort.py`) from the
   Synthea 1k synthetic EHR/claims bundle (see `SCHEMA.md`).
 - Features (`feature_panel.parquet`, via `src/features/build_features.py`):
-  pre-index BP trajectory (`sbp_*`/`dbp_*`, 365-day lookback) and SDOH
+  pre-index BP trajectory (`sbp_*`/`dbp_*`, 1095-day (3-year) lookback) and SDOH
   barrier flags (`flag_*`), both strictly before `index_date`.
 - Labels (`labels.parquet`, via `src/features/pdc.py`): `pdc_180d`
   (proportion of days covered) and `has_30_day_gap` (binary), both over the

@@ -1,7 +1,7 @@
 """Blood-pressure trajectory features over a pre-index lookback window.
 
 For each cohort patient we summarize their systolic and diastolic readings in the
-365 days *strictly prior* to index_date — i.e. the half-open interval
+1095 days (3 years) strictly prior to index_date — i.e. the half-open interval
 ``[index_date - 365d, index_date)``. For each of the two channels we emit:
 
     mean, max, min, latest_reading (closest to index_date), trajectory_slope
