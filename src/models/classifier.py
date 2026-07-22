@@ -216,10 +216,29 @@ def build_hist_gradient_boosting(**overrides) -> Pipeline:
     baseline: ``HistGradientBoostingClassifier`` bins features internally, so it
     is scale-invariant and treats NaN as a first-class split direction. Imputing
     would only discard the "value is missing" signal it already exploits.
+
+    Hyperparameters (tuned 2026-07-22 by a 24-config randomized search scored on
+    5-fold out-of-fold PR-AUC of the gap event; see the module docstring). Two
+    findings drove the change from the old ``max_depth=6, lr=0.05, l2=1,
+    class_weight="balanced"`` defaults:
+      * ``class_weight=None`` beats ``"balanced"`` on BOTH PR-AUC and F1 here --
+        balancing over-weights the minority and distorts the probability ranking
+        the threshold-free metrics reward. (Consequence: predicted probabilities
+        run lower, so the F1-optimal decision threshold is ~0.25, not ~0.5 --
+        tune the operating threshold, don't leave it at 0.5. Ranking/PR-AUC are
+        unaffected by this.)
+      * more, shallower trees with stronger L2 + early stopping generalize a
+        touch better than the old depth-6/500-iter setup.
+    Net out-of-fold: PR-AUC 0.572 -> 0.597, F1(best) 0.528 -> 0.550, ROC 0.847 ->
+    0.857. Modest and mildly optimistic (the winner was selected on these same
+    folds); the honest gain is a few thousandths less. Synthetic-data ceiling
+    still applies -- real lift comes from features/data, not more tuning.
     """
     params = dict(
-        max_depth=6, learning_rate=0.05, max_iter=500, l2_regularization=1.0,
-        class_weight="balanced", random_state=0,
+        learning_rate=0.02, max_leaf_nodes=31, l2_regularization=10.0,
+        min_samples_leaf=20, max_iter=1000, early_stopping=True,
+        n_iter_no_change=20, validation_fraction=0.1,
+        class_weight=None, random_state=0,
     )
     params.update(overrides)
     return Pipeline([
