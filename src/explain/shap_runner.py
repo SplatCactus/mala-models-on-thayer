@@ -113,6 +113,34 @@ class PatientDriverProfile:
     predicted_risk: float  # model-predicted probability of non-persistence
     driver_attributions: Dict[str, float]  # driver -> signed attribution
     raw_feature_attributions: Dict[str, float] = field(default_factory=dict)
+    # Actual (raw, pre-imputation) model-input feature values for this
+    # patient, keyed by feature name. This is the GROUND-TRUTH data, distinct
+    # from the signed SHAP attributions above -- safety overrides must gate on
+    # this, never on an attribution's sign. See driver_data_value().
+    raw_feature_values: Dict[str, float] = field(default_factory=dict)
+
+    def driver_data_value(self, driver: str) -> float:
+        """Max ACTUAL (raw, pre-imputation) feature value among the raw
+        features that map to ``driver``; 0.0 if none are present.
+
+        This is the ground-truth data signal a hard safety override must gate
+        on. It is deliberately NOT the SHAP attribution in
+        ``driver_attributions``: an attribution is ``coef_i * (x_i - mean_i)``,
+        whose sign flips with the learned coefficient and the cohort mean, so
+        a *negative* trauma coefficient makes the attribution positive for
+        every patient who does NOT have the flag -- firing the override on the
+        wrong ~half of the cohort. Reading the raw flag value avoids that
+        entirely. NaN (missing data) is treated as not-present, so a missing
+        flag never triggers a safety override.
+        """
+        present = [
+            v
+            for feat, drv in FEATURE_TO_DRIVER.items()
+            if drv == driver
+            for v in (self.raw_feature_values.get(feat, 0.0),)
+            if v is not None and v > 0  # NaN > 0 is False -> missing excluded
+        ]
+        return max(present) if present else 0.0
 
     def ranked_modifiable_drivers(self) -> List[Tuple[str, float]]:
         """Modifiable drivers ranked by |attribution| descending.
@@ -194,6 +222,10 @@ class SHAPRunner:
         x_imputed = self.imputer.transform(x)
         x_scaled = self.scaler.transform(x_imputed)[0]
 
+        # Capture the ACTUAL pre-imputation feature values so the routing
+        # engine's safety override can gate on real data, not on attributions.
+        raw_values = {feat: float(patient_row[feat]) for feat in ALL_MODEL_FEATURES}
+
         raw_attrib = self._attribute(x_scaled)
         predicted_risk = float(self.model.predict_proba(x_scaled.reshape(1, -1))[0, 1])
 
@@ -209,6 +241,7 @@ class SHAPRunner:
             predicted_risk=predicted_risk,
             driver_attributions=driver_attrib,
             raw_feature_attributions=raw_attrib,
+            raw_feature_values=raw_values,
         )
 
     def explain_cohort(self, df: pd.DataFrame) -> List[PatientDriverProfile]:

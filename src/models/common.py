@@ -46,9 +46,21 @@ HELD_ASIDE_DEMOGRAPHIC_COLUMNS = frozenset({
     "HEALTHCARE_EXPENSES", "HEALTHCARE_COVERAGE", "INCOME", "is_deceased",
 })
 
-# Clinical/SDOH feature prefixes emitted by src/features/trajectories.py
-# (sbp_*, dbp_*) and src/features/sdoh.py (flag_*).
-FEATURE_PREFIXES = ("sbp_", "dbp_", "flag_")
+# Feature-column prefixes, by emitting module. All are pre-index and
+# leakage-safe (see each module's docstring):
+#   trajectories.py  sbp_ / dbp_        BP trajectory summaries
+#   sdoh.py          flag_              SDOH barrier flags
+#   pre_index.py     cmb_               comorbidity count
+#                    rx_                regimen complexity (polypharmacy)
+#                    adh_               prior-adherence history (any drug)
+#                    engage_            encounter / BP-reading engagement
+#                    payer_             payer churn
+#                    xdrug_             cross-drug refill mechanics / tenure /
+#                                       prescribers / out-of-pocket cost (non-AH)
+FEATURE_PREFIXES = (
+    "sbp_", "dbp_", "flag_",
+    "cmb_", "rx_", "adh_", "engage_", "payer_", "xdrug_",
+)
 
 # Non-prefixed columns explicitly allowed as features.
 EXPLICIT_FEATURE_COLUMNS = frozenset({"age_years"})

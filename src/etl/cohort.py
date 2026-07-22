@@ -10,14 +10,19 @@ Run:  ./venv/bin/python src/etl/cohort.py
 """
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
 import polars as pl
 
 ROOT = Path(__file__).resolve().parents[2]
-PARQUET = ROOT / "data" / "parquet"
+# Input parquet dir + output snapshot are env-overridable so the same extraction
+# can be run against another dataset (e.g. the 1k data/parquet holdout) without
+# editing code: COHORT_PARQUET_DIR / COHORT_OUT.
+PARQUET = Path(os.environ.get("COHORT_PARQUET_DIR", ROOT / "data" / "parquet_300k"))
 SNAPSHOTS = ROOT / "data" / "snapshots"
+OUT_PATH = Path(os.environ.get("COHORT_OUT", SNAPSHOTS / "cohort_patients.parquet"))
 
 # SNOMED-CT condition code for Essential hypertension (confirmed against this dataset's
 # conditions.parquet on 2026-06-29 — single code, no synonyms found).
@@ -122,7 +127,8 @@ def main() -> int:
     )
 
     SNAPSHOTS.mkdir(parents=True, exist_ok=True)
-    out_path = SNAPSHOTS / "cohort_patients.parquet"
+    out_path = OUT_PATH
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     cohort.sink_parquet(out_path, compression="zstd")
 
     n_htn = htn_patients.select(pl.len()).collect().item()

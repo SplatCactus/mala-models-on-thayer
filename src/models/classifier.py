@@ -1,18 +1,31 @@
-"""classifier.py — binary classification baseline for antihypertensive persistence.
+"""classifier.py — antihypertensive-adherence classifiers (GBDT primary).
 
 Team decision (2026-07-02): go with Chris's classification framing instead of
-the survival-analysis approach in survival.py, now that the incident-user
-cohort fix (build_features.py, commit fee55b9) shrank the cohort from 262 to
-136 patients. Rationale from his email:
+the survival-analysis approach in survival.py.
 
-  * Validation: stratified K-fold CV (not a single held-out split) -- 136
-    patients is too small for a single temporal test set to give a stable
-    estimate (the 262-patient survival run already hit 1 event in its val
-    split; 136 patients would be worse).
-  * Models: simple, low-variance models only -- Logistic Regression or a
-    shallow Random Forest. Hold off on XGBoost/neural nets until more data.
-  * Metrics: PR-AUC / F1 instead of accuracy, given class imbalance.
-    class_weight='balanced'.
+Model choice, updated 2026-07-22
+--------------------------------
+The primary model is now a **gradient-boosted decision tree**
+(:func:`build_hist_gradient_boosting`, sklearn ``HistGradientBoostingClassifier``).
+For tabular EHR data — mixed-scale numeric features, binary flags, native
+missingness, non-linear interactions — GBDT is the correct default, and it wins
+empirically: honest out-of-fold ROC-AUC is **HGB ~0.65 vs logistic 0.58 /
+random forest 0.63** (see src/eval/run_auc.py). Logistic regression is kept as a
+lightweight, interpretable baseline; the shallow random forest is kept only as a
+labeled baseline — it is strictly dominated by HGB and its ``max_depth=12``
+overfits badly (in-sample ROC-AUC 0.93 vs out-of-fold 0.63).
+
+The original 2026-07-02 rationale said "simple, low-variance models only --
+Logistic Regression or a shallow Random Forest; hold off on XGBoost/neural nets
+until more data." That was written for the **n=136** incident-user cohort. The
+current feature panel has **16,205** labeled patients, so the small-n rationale
+is obsolete: GBDT (and, if wanted, XGBoost/LightGBM) is now appropriate.
+``HistGradientBoostingClassifier`` ships with sklearn — no new dependency.
+
+Validation stays as Chris specified: stratified K-fold CV with
+``shuffle=True``, PR-AUC / F1 over accuracy given class imbalance,
+``class_weight='balanced'``. Honest evaluation lives in src/eval/run_auc.py,
+which scores strictly out-of-fold (never on training rows).
 
 This also sidesteps survival.py's biggest documented limitation for free:
 that module needed a duration/event proxy derived from pdc_180d because
@@ -47,8 +60,9 @@ to support a temporal split again.
 Public API
 ----------
 load_classification_frame(panel_path, labels_path, ...) -> (X, y, patient_ids)
-build_logistic_regression(**overrides) -> sklearn Pipeline
-build_shallow_random_forest(**overrides) -> sklearn Pipeline
+build_hist_gradient_boosting(**overrides) -> sklearn Pipeline  (primary / deployed)
+build_logistic_regression(**overrides) -> sklearn Pipeline     (interpretable baseline)
+build_shallow_random_forest(**overrides) -> sklearn Pipeline   (dominated baseline)
 run_stratified_cv(build_model_fn, X, y, n_splits=5) -> dict of per-fold + mean/std metrics
 save_model(model, path) / load_model(path)  -- re-exported from common.py
 """
@@ -60,7 +74,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import average_precision_score, f1_score
@@ -173,8 +187,36 @@ def build_logistic_regression(**overrides) -> Pipeline:
     ])
 
 
+def build_hist_gradient_boosting(**overrides) -> Pipeline:
+    """Histogram-based gradient-boosted trees -- the primary / deployed model.
+
+    GBDT is the right default for tabular EHR data: it handles mixed-scale
+    numeric + binary-flag features, native missingness, and non-linear feature
+    interactions, and it is the empirical winner (out-of-fold ROC-AUC ~0.65 vs
+    logistic 0.58 / random forest 0.63; see src/eval/run_auc.py).
+
+    No ``SimpleImputer``/``StandardScaler`` in the pipeline, unlike the logistic
+    baseline: ``HistGradientBoostingClassifier`` bins features internally, so it
+    is scale-invariant and treats NaN as a first-class split direction. Imputing
+    would only discard the "value is missing" signal it already exploits.
+    """
+    params = dict(
+        max_depth=6, learning_rate=0.05, max_iter=500, l2_regularization=1.0,
+        class_weight="balanced", random_state=0,
+    )
+    params.update(overrides)
+    return Pipeline([
+        ("clf", HistGradientBoostingClassifier(**params)),
+    ])
+
+
 def build_shallow_random_forest(**overrides) -> Pipeline:
-    """Shallow (max_depth=4) Random Forest -- deliberately low-variance for n=136."""
+    """Random Forest (max_depth=12) -- kept only as a labeled, dominated baseline.
+
+    Strictly dominated by :func:`build_hist_gradient_boosting` and prone to
+    overfitting at this depth (in-sample ROC-AUC ~0.93 vs out-of-fold ~0.63).
+    Retained for comparison in the eval report, not for deployment.
+    """
     params = dict(
         n_estimators=300, max_depth=12, min_samples_leaf=5,
         class_weight="balanced", random_state=0, n_jobs=-1,
@@ -186,10 +228,17 @@ def build_shallow_random_forest(**overrides) -> Pipeline:
     ])
 
 
+# HGB first: it is the primary model and the deployed artifact (main() saves
+# every builder's fit, but HGB is the one to serve). Logistic and RF follow as
+# an interpretable baseline and a dominated baseline respectively.
 MODEL_BUILDERS = {
+    "hist_gradient_boosting": build_hist_gradient_boosting,
     "logistic_regression": build_logistic_regression,
     "shallow_random_forest": build_shallow_random_forest,
 }
+
+# The model family served in production; main() logs this explicitly.
+DEPLOYED_MODEL = "hist_gradient_boosting"
 
 
 def run_stratified_cv(
@@ -272,8 +321,9 @@ def main() -> int:
         model.fit(X, y)
         out_path = MODEL_DIR / f"{name}.joblib"
         save_model(model, out_path)
-        log.info("  saved %s", out_path)
+        log.info("  saved %s%s", out_path, "  <- deployed" if name == DEPLOYED_MODEL else "")
 
+    log.info("Deployed model artifact: %s.joblib", DEPLOYED_MODEL)
     return 0
 
 

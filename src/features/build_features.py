@@ -22,6 +22,7 @@ Design notes / gotchas baked into this script (see project memory):
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -34,24 +35,36 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pdc import calculate_pdc_outcome, ANTIHYPERTENSIVE_RXNORM_PRODUCT_LEVEL  # noqa: E402
 from trajectories import compute_bp_trajectory  # noqa: E402
 from sdoh import compute_sdoh_flags  # noqa: E402
+from pre_index import compute_pre_index_features  # noqa: E402
 
 # =============================================================================
 # CONFIG  — edit paths / column names here
 # =============================================================================
 ROOT = Path(__file__).resolve().parents[2]
-PARQUET = ROOT / "data" / "parquet_300k"   # 300k parquet (1k was data/parquet)
+# Paths are env-overridable so the identical feature pipeline can be run against
+# a second dataset (e.g. the 1k data/parquet holdout) without editing code:
+#   BF_PARQUET_DIR   input parquet directory (default 300k)
+#   BF_COHORT_PATH   cohort snapshot from cohort.py
+#   BF_VITALS_PATH   BP observations source (1k has no observations_bp subset, so
+#                    point this at the full observations.parquet — the BP funcs
+#                    filter by LOINC code internally)
+#   BF_OUTPUT_PATH / BF_LABELS_PATH   feature panel (X) + labels (y)
+PARQUET = Path(os.environ.get("BF_PARQUET_DIR", ROOT / "data" / "parquet_300k"))
 
 # Inputs.
-COHORT_PATH = ROOT / "data" / "snapshots" / "cohort_patients.parquet"  # output of src/etl/cohort.py
+COHORT_PATH = Path(os.environ.get(
+    "BF_COHORT_PATH", ROOT / "data" / "snapshots" / "cohort_patients.parquet"))
 MEDS_PATH = PARQUET / "medications.parquet"
-VITALS_PATH = PARQUET / "observations_bp.parquet"            # BP-only subset written by ingest.py
+VITALS_PATH = Path(os.environ.get("BF_VITALS_PATH", PARQUET / "observations_bp.parquet"))
 CONDITIONS_PATH = PARQUET / "conditions.parquet"             # SDOH SNOMED source (NOT observations)
 PATIENTS_PATH = PARQUET / "patients.parquet"                 # demographics for selection-bias report
+ENCOUNTERS_PATH = PARQUET / "encounters.parquet"            # pre-index engagement (visit counts)
+PAYER_TRANSITIONS_PATH = PARQUET / "payer_transitions.parquet"  # pre-index payer churn
 CODE_DICT_PATH = ROOT / "code_dictionary.yaml"
 
 # Output.
-OUTPUT_PATH = ROOT / "feature_panel.parquet"   # model features (X)
-LABELS_PATH = ROOT / "labels.parquet"          # model target (y): PDC outcome, kept separate
+OUTPUT_PATH = Path(os.environ.get("BF_OUTPUT_PATH", ROOT / "feature_panel.parquet"))  # model features (X)
+LABELS_PATH = Path(os.environ.get("BF_LABELS_PATH", ROOT / "labels.parquet"))         # model target (y)
 
 # Column conventions.
 PATIENT_ID_COL = "patient_id"       # cohort key column
@@ -176,6 +189,8 @@ def main() -> int:
     vitals = _read_parquet(VITALS_PATH, "vitals")
     conditions = _read_parquet(CONDITIONS_PATH, "conditions")
     patients = _read_parquet(PATIENTS_PATH, "patients")
+    encounters = _read_parquet(ENCOUNTERS_PATH, "encounters")
+    payer_transitions = _read_parquet(PAYER_TRANSITIONS_PATH, "payers")
     with open(CODE_DICT_PATH) as f:
         code_dictionary = yaml.safe_load(f)
     log.info("  loaded code_dictionary.yaml")
@@ -228,10 +243,17 @@ def main() -> int:
         date_col=CONDITIONS_DATE_COL,
     )
 
+    log.info("Calculating pre-index features (comorbidity/regimen/prior-adherence/engagement/payer)...")
+    pre_index_df = compute_pre_index_features(
+        cohort, conditions, meds, encounters, vitals, payer_transitions,
+        cohort_patient_col=PATIENT_ID_COL,
+        index_date_col=INDEX_DATE_COL,
+    )
+
     # ----- Merge -----------------------------------------------------------
     log.info("Merging features onto cohort...")
     panel = cohort
-    for name, feats in (("BP", bp_df), ("SDOH", sdoh_df)):
+    for name, feats in (("BP", bp_df), ("SDOH", sdoh_df), ("PRE", pre_index_df)):
         before = panel.shape[1]
         panel = panel.merge(feats, on=PATIENT_ID_COL, how="left")
         log.info("  merged %-4s (+%d cols) -> %d rows x %d cols",
