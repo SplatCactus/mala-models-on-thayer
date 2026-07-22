@@ -35,9 +35,16 @@ WorklistCard fields (per patient):
 from __future__ import annotations
 
 import datetime as dt
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from src.routing.capacity import CapacityResult, WorklistEntry
+
+# Default data_source label for the full-batch pipeline (run_routing_pipeline.py),
+# which doesn't pass these explicitly. src/sync/sync_job.py passes its own
+# "synthetic (demo)" label instead -- see that module's docstring for why the
+# two pipelines are labeled differently (one is the real batch artifact, the
+# other simulates a live feed for the judge demo).
+DEFAULT_DATA_SOURCE = "synthetic (batch)"
 
 ACTION_LABELS = {
     "pharmacist": {"en": "Pharmacist Review", "es": "Revisión de Farmacéutico"},
@@ -75,8 +82,22 @@ def _card(entry: WorklistEntry) -> dict:
 
 
 def build_worklist_payload(
-    capacity_result: CapacityResult, routing_table_version: int
+    capacity_result: CapacityResult,
+    routing_table_version: int,
+    *,
+    data_source: str = DEFAULT_DATA_SOURCE,
+    last_synced: Optional[str] = None,
 ) -> dict:
+    """Assemble the worklist JSON payload.
+
+    ``data_source`` / ``last_synced`` exist so a caller can label WHERE this
+    payload's data came from and WHEN it was last refreshed -- the full-batch
+    pipeline (run_routing_pipeline.py) doesn't pass these and gets sensible
+    defaults; src/sync/sync_job.py passes its own values each tick so the
+    dashboard badge can distinguish a live-synced demo run from a one-shot
+    batch run. ``last_synced`` defaults to ``generated_at`` when omitted --
+    for a one-shot batch run, "generated" and "synced" are the same moment.
+    """
     capped_cards = [_card(e) for e in capacity_result.capped_worklist]
     eligible_cards = [_card(e) for e in capacity_result.eligible_pool]
 
@@ -84,9 +105,12 @@ def build_worklist_payload(
     for e in capacity_result.eligible_pool:
         by_action[e.action] = by_action.get(e.action, 0) + 1
 
+    generated_at = dt.datetime.utcnow().isoformat() + "Z"
     payload = {
         "meta": {
-            "generated_at": dt.datetime.utcnow().isoformat() + "Z",
+            "generated_at": generated_at,
+            "data_source": data_source,
+            "last_synced": last_synced or generated_at,
             "routing_table_version": routing_table_version,
             "cohort_size": len(capacity_result.eligible_pool),
             "role_caps_used": capacity_result.role_caps_used,

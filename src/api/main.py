@@ -112,6 +112,11 @@ def _to_dashboard_view(payload: dict) -> dict:
 
     return {
         "generated_at": payload["meta"]["generated_at"],
+        # .get() with a fallback: routing_table.json produced before the
+        # data_source/last_synced fields existed (worklist_builder.py,
+        # sync-demo feature) would otherwise KeyError here.
+        "data_source": payload["meta"].get("data_source", "unknown"),
+        "last_synced": payload["meta"].get("last_synced", payload["meta"]["generated_at"]),
         "cohort_size": payload["meta"]["cohort_size"],
         "capacity": sum(payload["meta"]["role_caps_used"].values()),
         "role_caps_used": payload["meta"]["role_caps_used"],

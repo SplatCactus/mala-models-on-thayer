@@ -302,6 +302,37 @@
   }
   .stat-suffix { font-size: 12.5px; font-weight: 500; color: var(--text-secondary); }
 
+  /* ═══════════════════ SYNC BADGE (demo-only data-source indicator) ═══════════════════ */
+  /* Deliberately understated + dashed border, unlike the solid stat-chips —
+     this should read as "simulation status," never mistaken for a live
+     system-health indicator. */
+  .sync-badge {
+    display: flex;
+    justify-content: center;
+    margin: -0.6rem 0 1.6rem;
+  }
+  .sync-badge-inner {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: var(--card-warm);
+    border: 1.5px dashed var(--border-strong);
+    border-radius: 999px;
+    padding: 6px 16px;
+  }
+  .sync-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--aqua);
+    flex: none;
+    animation: pulseDot 1.6s ease-in-out infinite;
+  }
+  .sync-badge b { color: var(--text-primary); font-weight: 800; }
+  .sync-sep { color: var(--border-strong); }
+
   /* ═══════════════════ TOOLBAR: legend + search + filters ═══════════════════ */
   .toolbar {
     background: var(--card);
@@ -889,6 +920,7 @@
 <div class="wrap">
 
   <div class="meta-bar" id="meta-bar"></div>
+  <div class="sync-badge" id="sync-badge"></div>
 
   <section class="toolbar" id="toolbar" aria-label="Legend and filters">
     <div class="legend-row">
@@ -993,7 +1025,12 @@ const STRINGS = {
     clearFilters: "Reset",
     matches: (n, total) => `${n} of ${total} match`,
     emptyTitle: "No patients match",
-    emptyBody: "Try adjusting your search or filters."
+    emptyBody: "Try adjusting your search or filters.",
+    syncSource: "Data source",
+    syncLastSynced: "Last synced",
+    syncJustNow: "just now",
+    syncSecondsAgo: (n) => `${n}s ago`,
+    syncMinutesAgo: (n) => `${n}m ago`
   },
   es: {
     title: "Lista de trabajo CHW",
@@ -1037,9 +1074,20 @@ const STRINGS = {
     clearFilters: "Restablecer",
     matches: (n, total) => `${n} de ${total} coinciden`,
     emptyTitle: "Ningún paciente coincide",
-    emptyBody: "Prueba a ajustar la búsqueda o los filtros."
+    emptyBody: "Prueba a ajustar la búsqueda o los filtros.",
+    syncSource: "Fuente de datos",
+    syncLastSynced: "Última sincronización",
+    syncJustNow: "justo ahora",
+    syncSecondsAgo: (n) => `hace ${n}s`,
+    syncMinutesAgo: (n) => `hace ${n}m`
   }
 };
+
+// Demo-only: how often the dashboard re-fetches /worklist to pick up the
+// sync job's incremental updates (src/sync/sync_job.py writes the same
+// routing_table.json the API serves, on its own timer -- this just needs to
+// poll often enough that the badge/table visibly grow during a demo).
+const SYNC_POLL_MS = 5000;
 
 const ALL_ACTIONS = ["pharmacist", "social_worker", "chw_call"];
 
@@ -1109,6 +1157,34 @@ function formatSingleDate(dateStr) {
   const locale = currentLang === "es" ? "es-ES" : "en-US";
   const d = new Date(dateStr + "T00:00:00");
   return d.toLocaleDateString(locale, opts);
+}
+
+/* ── Sync badge: relative time since last_synced, re-derived on every
+      render (both the 5s data poll and the 1s cosmetic tick below) so it
+      never needs its own separate state ── */
+function formatRelativeTime(iso) {
+  const s = STRINGS[currentLang];
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "";
+  const deltaSec = Math.max(Math.round((Date.now() - then) / 1000), 0);
+  if (deltaSec < 3) return s.syncJustNow;
+  if (deltaSec < 60) return s.syncSecondsAgo(deltaSec);
+  return s.syncMinutesAgo(Math.round(deltaSec / 60));
+}
+
+function renderSyncBadge() {
+  if (!worklistData) return;
+  const s = STRINGS[currentLang];
+  const source = worklistData.data_source || "unknown";
+  const synced = worklistData.last_synced;
+  document.getElementById("sync-badge").innerHTML = `
+    <span class="sync-badge-inner">
+      <span class="sync-dot"></span>
+      <span>${s.syncSource}: <b>${source}</b></span>
+      <span class="sync-sep">·</span>
+      <span>${s.syncLastSynced}: <b>${synced ? formatRelativeTime(synced) : "—"}</b></span>
+    </span>
+  `;
 }
 
 function buildSmsLine(p) {
@@ -1279,6 +1355,7 @@ function render(mode = "full") {
   document.getElementById("legend-social").textContent = s.legendSocial;
   document.getElementById("legend-chw").textContent = s.legendChw;
   syncToolbarLabels(s);
+  renderSyncBadge();
 
   if (!worklistData) return;
 
@@ -1412,6 +1489,19 @@ function render(mode = "full") {
 initToolbar();
 playHero();
 loadWorklist();
+
+// Demo-only polling: re-fetch /worklist periodically so the sync job's
+// incremental updates (new patients, updated last_synced) show up without
+// a manual reload. A full re-render (not "soft" mode) is fine at this
+// cadence -- this isn't the keystroke/slider path scheduleRender() exists
+// for. If a fetch fails mid-demo (e.g. API restarting), loadWorklist's own
+// try/catch already shows the existing error state; the interval just
+// tries again next tick.
+setInterval(loadWorklist, SYNC_POLL_MS);
+
+// Cheap cosmetic tick: re-render just the sync badge every second so "last
+// synced: Xs ago" counts up smoothly between the 5s data polls above.
+setInterval(renderSyncBadge, 1000);
 </script>
 </body>
 </html>
