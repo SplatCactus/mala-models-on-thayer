@@ -23,9 +23,9 @@ WORKFLOW
    d. LOOKUP — map the resolved driver to an action via `drivers` table,
       carrying forward `secondary_action` into the background data layer
       (never surfaced as a second primary action).
-3. Emit a RoutingDecision with a full bilingual (EN/ES) audit rationale
-   string so a human reviewer can see exactly why a patient was routed
-   where they were, without needing to inspect model internals.
+3. Emit a RoutingDecision with a full multilingual (EN/ES/PT/HT) audit
+   rationale string so a human reviewer can see exactly why a patient was
+   routed where they were, without needing to inspect model internals.
 
 No ML happens in this file. Every decision is fully reproducible from
 routing_table.yaml + the ranked driver list handed in by shap_runner.py.
@@ -66,6 +66,8 @@ class RoutingDecision:
     routing_table_version: int
     rationale_en: str
     rationale_es: str
+    rationale_pt: str
+    rationale_ht: str
     all_candidate_drivers: List[Tuple[str, float]] = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -82,6 +84,8 @@ class RoutingDecision:
             "rationale": {
                 "en": self.rationale_en,
                 "es": self.rationale_es,
+                "pt": self.rationale_pt,
+                "ht": self.rationale_ht,
             },
             "candidate_drivers": [
                 {"driver": d, "value": round(v, 6)} for d, v in self.all_candidate_drivers
@@ -162,6 +166,8 @@ class RoutingRuleEngine:
                     routing_table_version=self.version,
                     rationale_en=cfg["rationale_en"],
                     rationale_es=cfg["rationale_es"],
+                    rationale_pt=cfg["rationale_pt"],
+                    rationale_ht=cfg["rationale_ht"],
                     all_candidate_drivers=profile.ranked_modifiable_drivers(),
                 )
         return None
@@ -230,6 +236,8 @@ class RoutingRuleEngine:
         cfg = self.drivers[resolved_driver]
         rationale_en = cfg["rationale_en"].format(value=resolved_value, patient_id=profile.patient_id)
         rationale_es = cfg["rationale_es"].format(value=resolved_value, patient_id=profile.patient_id)
+        rationale_pt = cfg["rationale_pt"].format(value=resolved_value, patient_id=profile.patient_id)
+        rationale_ht = cfg["rationale_ht"].format(value=resolved_value, patient_id=profile.patient_id)
 
         if used_hierarchy:
             hierarchy_note_en = (
@@ -240,8 +248,19 @@ class RoutingRuleEngine:
                 " [Desempate: el factor principal no superó al segundo por el "
                 f"margen de {self.tie_break_margin}x; resuelto mediante jerarquía clínica.]"
             )
+            hierarchy_note_pt = (
+                " [Desempate: o fator principal não superou o segundo classificado "
+                f"pela margem de {self.tie_break_margin}x; resolvido através da "
+                "hierarquia clínica.]"
+            )
+            hierarchy_note_ht = (
+                " [Depataj: pi gwo faktè a pa t depase dezyèm faktè a ak yon maj "
+                f"{self.tie_break_margin}x; nou rezoud sa ak yerachi klinik la.]"
+            )
             rationale_en += hierarchy_note_en
             rationale_es += hierarchy_note_es
+            rationale_pt += hierarchy_note_pt
+            rationale_ht += hierarchy_note_ht
 
         return RoutingDecision(
             patient_id=profile.patient_id,
@@ -255,6 +274,8 @@ class RoutingRuleEngine:
             routing_table_version=self.version,
             rationale_en=rationale_en,
             rationale_es=rationale_es,
+            rationale_pt=rationale_pt,
+            rationale_ht=rationale_ht,
             all_candidate_drivers=ranked,
         )
 

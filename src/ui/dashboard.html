@@ -983,6 +983,8 @@
       <div class="lang-toggle" role="group" aria-label="Language">
         <button id="btn-en" class="active" onclick="setLang('en')">EN</button>
         <button id="btn-es" onclick="setLang('es')">ES</button>
+        <button id="btn-pt" onclick="setLang('pt')">PT</button>
+        <button id="btn-ht" onclick="setLang('ht')">HT</button>
       </div>
     </div>
   </div>
@@ -1245,6 +1247,164 @@ const STRINGS = {
       referral_uniteus: "Referido de ciclo cerrado Unite RI",
       other: "Otro"
     }
+  },
+  pt: {
+    title: "Lista de trabalho do CHW",
+    subtitle: "Pacientes em risco de interromper a medicação, ordenados por urgência",
+    cohort: "Coorte",
+    capacity: "Capacidade",
+    showing: "A mostrar",
+    patients: "pacientes",
+    colPatient: "Paciente",
+    colPriority: "Prioridade",
+    colBreakWindow: "Janela prevista de interrupção",
+    colRisk: "Risco",
+    colDriver: "Fator principal",
+    colAction: "Encaminhado para",
+    colScript: "Guião",
+    badgeSafety: "Anulação de segurança",
+    badgeReview: "Revisão humana",
+    viewScript: "Ver guião",
+    hideScript: "Ocultar",
+    outreachScript: "Guião de contacto",
+    pharmacist: "Farmacêutico",
+    socialWorker: "Assistente social",
+    chwCall: "Chamada de CHW",
+    loading: "A carregar lista…",
+    error: "Não foi possível ligar à API. O uvicorn está a correr na porta 8000?",
+    legendPharmacist: "Farmacêutico",
+    legendSocial: "Assistente social",
+    legendChw: "Chamada de CHW",
+    smsLabel: "Lembrete SMS agendado",
+    smsLangEn: "inglês",
+    smsLangEs: "espanhol",
+    smsDetail: (lang, date) => `será enviado em ${lang} em ${date}`,
+    legendTitle: "Encaminhamento",
+    legendHint: "clique para filtrar",
+    searchLabel: "Pesquisar",
+    searchPlaceholder: "Pesquisar pacientes…",
+    filterWindow: "Janela de interrupção",
+    filterFrom: "De",
+    filterTo: "Até",
+    filterMinRisk: "Risco mín.",
+    clearFilters: "Repor",
+    matches: (n, total) => `${n} de ${total} correspondem`,
+    emptyTitle: "Nenhum paciente corresponde",
+    emptyBody: "Tente ajustar a pesquisa ou os filtros.",
+    syncSource: "Fonte de dados",
+    syncLastSynced: "Última sincronização",
+    syncJustNow: "agora mesmo",
+    syncSecondsAgo: (n) => `há ${n}s`,
+    syncMinutesAgo: (n) => `há ${n}m`,
+    colStatus: "Estado",
+    statusRouted: "Enviado",
+    statusAcknowledged: "Reconhecido",
+    statusActioned: "Atendido",
+    statusObserved: "Resultado observado",
+    outcomeOnTime: "Recarga a tempo ✓",
+    outcomeBreak: "Interrupção confirmada ✗",
+    outcomePending: "A aguardar recarga",
+    loopTitle: "Fecho do ciclo",
+    loopRouted: "enviados",
+    loopReached: "contactados",
+    loopClosed: "recargas confirmadas",
+    loopRate: "taxa de fecho",
+    modalTitle: "Marcar como atendido",
+    modalPatient: (id, driver) => `Paciente <b>${id}</b> · barreira: ${driver}`,
+    modalIntervention: "Intervenção realizada",
+    modalRef: "N.º de referência",
+    modalNote: "Notas (opcional)",
+    modalCancel: "Cancelar",
+    modalSave: "Marcar como atendido",
+    modalHint: "Registado localmente para esta demonstração. O ciclo só se FECHA com uma recarga objetiva (Estado 4), nunca com esta entrada. O encaminhamento real usaria a Unite Rhode Island (Unite Us); transporte via MTM (855-330-9131).",
+    interventions: {
+      transport_mtm: "Viagem NEMT da MTM reservada",
+      transport_ripta: "Passe de autocarro RIPTA emitido",
+      language_chw: "Visita domiciliária de CHW bilingue",
+      food_snap: "Encaminhado para SNAP / banco alimentar (HEZ)",
+      refill_sync: "Sincronização de recarga por correio (90 dias)",
+      referral_uniteus: "Encaminhamento de ciclo fechado Unite RI",
+      other: "Outro"
+    }
+  },
+  ht: {
+    title: "Lis travay CHW",
+    subtitle: "Pasyan ki gen risk pou yo rive nan yon enteripsyon nan medikaman yo, nan lòd ijans",
+    cohort: "Gwoup",
+    capacity: "Kapasite",
+    showing: "K ap montre",
+    patients: "pasyan",
+    colPatient: "Pasyan",
+    colPriority: "Priyorite",
+    colBreakWindow: "Fenèt prevwa pou enteripsyon",
+    colRisk: "Risk",
+    colDriver: "Pi gwo faktè",
+    colAction: "Voye bay",
+    colScript: "Eskript",
+    badgeSafety: "Anilasyon sekirite",
+    badgeReview: "Revizyon imen",
+    viewScript: "Gade eskript",
+    hideScript: "Kache",
+    outreachScript: "Eskript kontak",
+    pharmacist: "Famasyen",
+    socialWorker: "Travayè sosyal",
+    chwCall: "Apèl CHW",
+    loading: "K ap chaje lis la…",
+    error: "Nou pa t kapab konekte ak API a. Èske uvicorn ap kouri sou pò 8000?",
+    legendPharmacist: "Famasyen",
+    legendSocial: "Travayè sosyal",
+    legendChw: "Apèl CHW",
+    smsLabel: "Rapèl SMS pwograme",
+    smsLangEn: "anglè",
+    smsLangEs: "panyòl",
+    smsDetail: (lang, date) => `ap voye an ${lang} le ${date}`,
+    legendTitle: "Kalite swen",
+    legendHint: "klike pou filtre",
+    searchLabel: "Chèche",
+    searchPlaceholder: "Chèche pasyan…",
+    filterWindow: "Fenèt enteripsyon",
+    filterFrom: "Depi",
+    filterTo: "Jiska",
+    filterMinRisk: "Risk min.",
+    clearFilters: "Reyajiste",
+    matches: (n, total) => `${n} nan ${total} matche`,
+    emptyTitle: "Pa gen pasyan ki matche",
+    emptyBody: "Eseye ajiste rechèch ou oswa filtè yo.",
+    syncSource: "Sous done",
+    syncLastSynced: "Dènye sinkwonizasyon",
+    syncJustNow: "kounye a",
+    syncSecondsAgo: (n) => `sa fè ${n}s`,
+    syncMinutesAgo: (n) => `sa fè ${n}m`,
+    colStatus: "Estati",
+    statusRouted: "Voye",
+    statusAcknowledged: "Rekonèt",
+    statusActioned: "Aksyone",
+    statusObserved: "Rezilta obsève",
+    outcomeOnTime: "Rechaj a tan ✓",
+    outcomeBreak: "Enteripsyon konfime ✗",
+    outcomePending: "K ap tann rechaj",
+    loopTitle: "Fèmti sik la",
+    loopRouted: "voye",
+    loopReached: "kontakte",
+    loopClosed: "rechaj konfime",
+    loopRate: "pousantaj fèmti",
+    modalTitle: "Make kòm aksyone",
+    modalPatient: (id, driver) => `Pasyan <b>${id}</b> · baryè: ${driver}`,
+    modalIntervention: "Entèvansyon ki te fèt",
+    modalRef: "Nimewo referans",
+    modalNote: "Nòt (opsyonèl)",
+    modalCancel: "Anile",
+    modalSave: "Make kòm aksyone",
+    modalHint: "Anrejistre lokalman pou demo sa a. Sik la sèlman FÈMEN ak yon rechaj objektif (Etap 4), pa janm ak antre sa a. Aranjman reyèl la ta pase pa Unite Rhode Island (Unite Us); transpò pa MTM (855-330-9131).",
+    interventions: {
+      transport_mtm: "Vwayaj NEMT MTM rezève",
+      transport_ripta: "Kat bis RIPTA bay",
+      language_chw: "Vizit lakay ak CHW bileng",
+      food_snap: "Voye bay SNAP / bank manje (HEZ)",
+      refill_sync: "Senkwonize rechaj pa lapòs (90 jou)",
+      referral_uniteus: "Referans sik fèmen Unite RI",
+      other: "Lòt"
+    }
   }
 };
 
@@ -1349,7 +1509,7 @@ function openActionModal(pid, driver) {
   const s = STRINGS[currentLang];
   const p = worklistData.worklist.find(x => x.patient_id === pid);
   modalPid = pid;
-  const driverLabel = p ? (currentLang === "es" ? p.driver_label_es : p.driver_label_en) : driver;
+  const driverLabel = p ? driverLabelFor(p) : driver;
   document.getElementById("modal-title").textContent = s.modalTitle;
   document.getElementById("modal-patient").innerHTML = s.modalPatient(p ? p.display_name : pid, driverLabel);
   document.getElementById("modal-lbl-intervention").textContent = s.modalIntervention;
@@ -1436,10 +1596,18 @@ window.addEventListener("scroll", () => {
   }
 }, { passive: true });
 
+// All selectable UI languages, in toggle order. Adding a language means:
+// 1 more <button id="btn-<code>"> in .lang-toggle, 1 more STRINGS.<code>
+// block (same keys as en/es), and this array -- setLang()/render() are
+// already generic over LANGS, nothing else to touch.
+const LANGS = ["en", "es", "pt", "ht"];
+
+// BCP-47 locale tag per language, for Date#toLocaleDateString.
+const LOCALE_TAGS = { en: "en-US", es: "es-ES", pt: "pt-PT", ht: "ht-HT" };
+
 function setLang(lang) {
   currentLang = lang;
-  document.getElementById("btn-en").classList.toggle("active", lang === "en");
-  document.getElementById("btn-es").classList.toggle("active", lang === "es");
+  LANGS.forEach(l => document.getElementById(`btn-${l}`).classList.toggle("active", l === lang));
   render();
   playHero();
 }
@@ -1452,9 +1620,15 @@ function actionLabel(action) {
   return action;
 }
 
+// The API returns one field per LANGS entry (driver_label_en/es/pt/ht,
+// outreach_script_en/es/pt/ht) -- these just pick the one matching the
+// current toggle instead of a hardcoded es-or-en ternary.
+function driverLabelFor(p) { return p[`driver_label_${currentLang}`]; }
+function outreachScriptFor(p) { return p[`outreach_script_${currentLang}`]; }
+
 function formatDateRange(start, end) {
   const opts = { month: "short", day: "numeric" };
-  const locale = currentLang === "es" ? "es-ES" : "en-US";
+  const locale = LOCALE_TAGS[currentLang] || "en-US";
   const startDate = new Date(start + "T00:00:00");
   const endDate = new Date(end + "T00:00:00");
   return `${startDate.toLocaleDateString(locale, opts)} – ${endDate.toLocaleDateString(locale, opts)}`;
@@ -1462,7 +1636,7 @@ function formatDateRange(start, end) {
 
 function formatSingleDate(dateStr) {
   const opts = { month: "short", day: "numeric" };
-  const locale = currentLang === "es" ? "es-ES" : "en-US";
+  const locale = LOCALE_TAGS[currentLang] || "en-US";
   const d = new Date(dateStr + "T00:00:00");
   return d.toLocaleDateString(locale, opts);
 }
@@ -1708,8 +1882,8 @@ function render(mode = "full") {
   const maxPriority = Math.max(...sorted.map(p => p.priority_score || 0), 0);
 
   const rows = sorted.map((p, i) => {
-    const driverLabel = currentLang === "es" ? p.driver_label_es : p.driver_label_en;
-    const script = currentLang === "es" ? p.outreach_script_es : p.outreach_script_en;
+    const driverLabel = driverLabelFor(p);
+    const script = outreachScriptFor(p);
     const isExpanded = expandedId === p.patient_id;
     const langBadge = p.preferred_language === "es" ? "ES" : "EN";
     const stagger = Math.min(i * 22, 380);

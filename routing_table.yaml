@@ -15,9 +15,14 @@
 # confirmed with product before this table is treated as final.
 # ---------------------------------------------------------------------------
 
-version: 1
+version: 2
 schema_version: "1.0"
-last_updated: "2026-07-03"
+last_updated: "2026-07-22"
+# v2 (2026-07-22): added Portuguese (rationale_pt) and Haitian Creole
+# (rationale_ht) outreach-script translations alongside the existing EN/ES,
+# same field-per-language pattern, same register/complexity as the ES
+# translations. No routing logic changed -- version bumped per this file's
+# own "any change should bump version" convention above.
 
 # Relative-margin tie-break threshold. The top SHAP driver must exceed the
 # second-ranked driver's |value| by this multiple to be used directly.
@@ -60,6 +65,16 @@ safety_overrides:
       contribuyente. Se deriva directamente a trabajo social según el
       protocolo de seguridad clínica; se marca para revisión humana
       obligatoria antes de cualquier contacto automatizado.
+    rationale_pt: >-
+      Foi detetada exposição a trauma (violência doméstica) como fator
+      contribuinte. Encaminhado diretamente para o assistente social,
+      conforme o protocolo de segurança clínica; sinalizado para revisão
+      humana obrigatória antes de qualquer contacto automatizado.
+    rationale_ht: >-
+      Nou detekte yon ekspozisyon a chòk (vyolans nan koup) kòm yon faktè
+      ki kontribye. Nou voye dosye a dirèkteman bay travayè sosyal la
+      selon pwotokòl sekirite klinik la; nou make li pou revizyon imen
+      obligatwa anvan nenpòt kontak otomatik fèt.
 
 # Standard driver -> action map. Each entry defines the primary action,
 # an optional secondary_action (carried in the background data layer only,
@@ -77,6 +92,14 @@ drivers:
       El principal factor modificable es la inestabilidad de vivienda
       (valor SHAP {value:.3f}). Se deriva a trabajo social para recursos
       de apoyo de vivienda.
+    rationale_pt: >-
+      O principal fator modificável é a instabilidade habitacional (valor
+      SHAP {value:.3f}). Encaminhado para o assistente social para
+      recursos de apoio à habitação.
+    rationale_ht: >-
+      Pi gwo faktè ki ka chanje a se enstabilite lojman (valè SHAP
+      {value:.3f}). Nou voye dosye a bay travayè sosyal la pou resous ki
+      ka ede ak lojman.
 
   financial_barrier:
     action: social_worker
@@ -89,6 +112,15 @@ drivers:
       El principal factor modificable es una barrera financiera para el
       acceso a medicamentos (valor SHAP {value:.3f}). Se deriva a trabajo
       social para asistencia financiera y navegación de beneficios.
+    rationale_pt: >-
+      O principal fator modificável é uma barreira financeira ao acesso a
+      medicamentos (valor SHAP {value:.3f}). Encaminhado para o
+      assistente social para assistência financeira e orientação sobre
+      benefícios.
+    rationale_ht: >-
+      Pi gwo faktè ki ka chanje a se yon baryè finansye pou jwenn
+      medikaman (valè SHAP {value:.3f}). Nou voye dosye a bay travayè
+      sosyal la pou èd finansye ak enfòmasyon sou benefis.
 
   transport_barrier:
     action: social_worker
@@ -101,6 +133,14 @@ drivers:
       El principal factor modificable es una barrera de transporte
       (valor SHAP {value:.3f}). Se deriva a trabajo social, conforme al
       precedente establecido para casos de transporte.
+    rationale_pt: >-
+      O principal fator modificável é uma barreira de transporte (valor
+      SHAP {value:.3f}). Encaminhado para o assistente social, conforme
+      o precedente estabelecido para casos relacionados com transporte.
+    rationale_ht: >-
+      Pi gwo faktè ki ka chanje a se yon baryè transpò (valè SHAP
+      {value:.3f}). Nou voye dosye a bay travayè sosyal la, dapre
+      presedan ki etabli pou ka ki gen rapò ak transpò.
 
   isolation:
     action: chw_call
@@ -113,6 +153,16 @@ drivers:
       El principal factor modificable es el aislamiento social (valor
       SHAP {value:.3f}). Se deriva a llamada de un trabajador comunitario
       de salud (CHW). [supuesto — confirmar con producto]
+    rationale_pt: >-
+      O principal fator modificável é o isolamento social (valor SHAP
+      {value:.3f}). Encaminhado para uma chamada do agente comunitário de
+      saúde (CHW) para promover ligação social. [suposição — confirmar
+      com o produto]
+    rationale_ht: >-
+      Pi gwo faktè ki ka chanje a se izolman sosyal (valè SHAP
+      {value:.3f}). Nou voye dosye a pou yon apèl ak yon Ajan Kominotè
+      Sante (CHW) pou ede moun nan konekte ak lòt moun. [sipozisyon —
+      konfime ak ekip pwodwi a]
 
   low_education:
     action: chw_call
@@ -126,6 +176,16 @@ drivers:
       en salud / educación (valor SHAP {value:.3f}). Se deriva a llamada
       de CHW para asesoría adaptada al nivel de alfabetización. [supuesto
       — confirmar con producto]
+    rationale_pt: >-
+      O principal fator modificável é um baixo nível de literacia em
+      saúde / educação (valor SHAP {value:.3f}). Encaminhado para uma
+      chamada do CHW para aconselhamento sobre medicação adaptado ao
+      nível de literacia. [suposição — confirmar com o produto]
+    rationale_ht: >-
+      Pi gwo faktè ki ka chanje a se yon nivo ba nan konesans sou sante /
+      edikasyon (valè SHAP {value:.3f}). Nou voye dosye a pou yon apèl ak
+      CHW pou konsèy sou medikaman ki adapte ak nivo konesans moun nan.
+      [sipozisyon — konfime ak ekip pwodwi a]
 
   migrant_status:
     action: chw_call
@@ -139,6 +199,16 @@ drivers:
       SHAP {value:.3f}). Se deriva a llamada de CHW como acción primaria;
       trabajo social se registra como acción secundaria solo en la capa
       de datos de fondo.
+    rationale_pt: >-
+      O principal fator modificável é o estatuto migratório (valor SHAP
+      {value:.3f}). Encaminhado para uma chamada do CHW como ação
+      principal; o assistente social é registado como ação secundária
+      apenas na camada de dados de segundo plano.
+    rationale_ht: >-
+      Pi gwo faktè ki ka chanje a se estati imigran (valè SHAP
+      {value:.3f}). Nou voye dosye a pou yon apèl ak CHW kòm aksyon
+      prensipal la; travayè sosyal la make kòm aksyon segondè, sèlman nan
+      done ki dèyè sistèm nan.
 
   bp_trend:
     action: pharmacist
@@ -153,3 +223,13 @@ drivers:
       (valor SHAP {value:.3f}), incluidos los casos redirigidos desde
       complejidad del régimen (fuera de alcance este sprint). Se deriva
       a farmacéutico para revisión de medicación.
+    rationale_pt: >-
+      O principal fator modificável é a tendência da pressão arterial
+      (valor SHAP {value:.3f}), incluindo casos redirecionados a partir
+      da complexidade do regime (fora do âmbito deste sprint).
+      Encaminhado para o farmacêutico para revisão da medicação.
+    rationale_ht: >-
+      Pi gwo faktè ki ka chanje a se tandans tansyon an (valè SHAP
+      {value:.3f}), sa gen ladan ka ki soti nan konpleksite tretman an
+      (pa nan objektif sprint sa a). Nou voye dosye a bay famasyen an pou
+      revize medikaman yo.
