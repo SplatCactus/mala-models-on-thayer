@@ -7,15 +7,17 @@ so no patient is ever scored by a model that saw them in training. That is the
 difference between the honest ROC-AUC (~0.65) and the misleading in-sample
 number (~0.93) a refit-on-everything RandomForest reports by memorization.
 
+Target: ``has_30_day_gap`` — y=1 is the >=30-day discontinuation gap, the EVENT
+we predict (event-positive polarity, congruent with the routing pipeline).
+
 What it reports, per model
 --------------------------
   * ROC-AUC            — out-of-fold discrimination on the full cohort.
-  * PR-AUC (FAILURE)   — average precision for the *non-adherent* minority, the
-                         class we actually care about. Because y=1 means
-                         *adherent*, the failure class is ``1 - y`` scored by
-                         ``1 - proba`` (``average_precision_score(1-y, 1-p)``),
-                         reported next to its no-skill baseline ``(1 - y).mean()``
-                         so a lift over chance is visible at a glance.
+  * PR-AUC (GAP EVENT) — average precision for the gap event, the minority class
+                         we actually care about. Since y=1 IS the event, this is
+                         just ``average_precision_score(y, proba)``, reported next
+                         to its no-skill baseline ``y.mean()`` (the event
+                         prevalence) so a lift over chance is visible at a glance.
   * ROC-AUC by ETHNICITY — the same out-of-fold predictions sliced by the
                          ETHNICITY column held aside in feature_panel.parquet
                          (never a model input), to check for a fairness gap.
@@ -139,11 +141,12 @@ def evaluate() -> dict:
     log.info("Loading classification frame...")
     X, y, patient_ids = load_classification_frame(PANEL_PATH, LABELS_PATH)
     n_pos, n = int(y.sum()), len(y)
-    log.info("  %d patients x %d features, %d adherent (%.1f%%), %d non-adherent",
+    # y=1 is the EVENT we predict (has_30_day_gap: a >=30-day discontinuation gap).
+    log.info("  %d patients x %d features, %d with a >=30d gap (%.1f%%), %d without",
              n, X.shape[1], n_pos, 100 * y.mean(), n - n_pos)
 
-    fail_baseline = float(1 - y.mean())  # no-skill PR-AUC for the failure (non-adherent) class
-    log.info("  no-skill PR-AUC baseline for the FAILURE class: %.3f", fail_baseline)
+    event_baseline = float(y.mean())  # no-skill PR-AUC for the event (gap) class == its prevalence
+    log.info("  no-skill PR-AUC baseline for the GAP-EVENT class: %.3f", event_baseline)
 
     ethnicity = ethnicity_series(patient_ids)
     if ethnicity is None:
@@ -153,24 +156,25 @@ def evaluate() -> dict:
         "n_patients": n,
         "n_features": int(X.shape[1]),
         "feature_columns": list(X.columns),
-        "prevalence_adherent": float(y.mean()),
-        "pr_auc_failure_baseline": fail_baseline,
+        "target": "has_30_day_gap",
+        "prevalence_gap_event": float(y.mean()),
+        "pr_auc_event_baseline": event_baseline,
         "cv": {"n_splits": N_SPLITS, "shuffle": True, "random_state": RANDOM_STATE},
         "models": {},
     }
 
     for name, build_fn in MODEL_BUILDERS.items():
         log.info("Out-of-fold %d-fold CV: %s", N_SPLITS, name)
-        proba = out_of_fold_proba(build_fn, X, y)
+        proba = out_of_fold_proba(build_fn, X, y)  # P(gap event)
         roc = float(roc_auc_score(y, proba))
-        pr_fail = float(average_precision_score(1 - y, 1 - proba))
-        log.info("  %-24s ROC-AUC %.3f | PR-AUC(fail) %.3f (baseline %.3f, lift %+.3f)",
-                 name, roc, pr_fail, fail_baseline, pr_fail - fail_baseline)
+        pr_event = float(average_precision_score(y, proba))  # event is the positive class directly
+        log.info("  %-24s ROC-AUC %.3f | PR-AUC(gap) %.3f (baseline %.3f, lift %+.3f)",
+                 name, roc, pr_event, event_baseline, pr_event - event_baseline)
 
         entry = {
             "roc_auc": roc,
-            "pr_auc_failure": pr_fail,
-            "pr_auc_failure_lift": pr_fail - fail_baseline,
+            "pr_auc_event": pr_event,
+            "pr_auc_event_lift": pr_event - event_baseline,
         }
         if ethnicity is not None:
             entry["roc_auc_by_ethnicity"] = by_ethnicity_roc(y, proba, ethnicity)

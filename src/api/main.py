@@ -48,6 +48,10 @@ from fastapi.middleware.cors import CORSMiddleware
 ROOT = Path(__file__).resolve().parents[2]
 
 WORKLIST_PATH = ROOT / "data" / "snapshots" / "routing_table.json"
+# Objective State-4 outcomes produced by src/sync/loop_closure.py. Optional:
+# if absent, rows simply carry no loop_outcome and the dashboard shows every
+# patient as still-open (Routed). Read-only, like WORKLIST_PATH.
+LOOP_OUTCOMES_PATH = ROOT / "data" / "snapshots" / "loop_outcomes.json"
 
 app = FastAPI(title="BP Cascade RI — Worklist API")
 
@@ -77,9 +81,25 @@ DRIVER_LABELS = {
 }
 
 
+def _load_loop_outcomes() -> dict:
+    """Objective per-patient closure outcomes (patient_id -> outcome dict), or {}.
+
+    Produced by src/sync/loop_closure.py. Missing file = nobody observed yet;
+    the dashboard treats an absent outcome as 'loop still open'. This is the
+    OBJECTIVE State-4 signal (refill confirmed) and is deliberately server-side
+    and read-only -- the CHW's subjective progress (Acknowledged/Actioned) lives
+    client-side in the dashboard, but loop CLOSURE never depends on self-report.
+    """
+    if not LOOP_OUTCOMES_PATH.exists():
+        return {}
+    with open(LOOP_OUTCOMES_PATH) as f:
+        return json.load(f).get("outcomes", {})
+
+
 def _to_dashboard_view(payload: dict) -> dict:
     """Translate worklist_builder.py's payload into dashboard.html's flat shape."""
     today = dt.date.today()
+    outcomes = _load_loop_outcomes()
     rows = []
     for card in payload["capped_worklist"]:
         dtb = card["days_to_predicted_break"]
@@ -108,6 +128,9 @@ def _to_dashboard_view(payload: dict) -> dict:
             "requires_human_review": card["requires_human_review"],
             "is_safety_override": card["is_safety_override"],
             "priority_score": card["priority_score"],
+            # Objective loop-closure outcome (State 4), or null if not yet
+            # observed. {observed, on_time_refill, event_date, source}.
+            "loop_outcome": outcomes.get(card["patient_id"]),
         })
 
     return {

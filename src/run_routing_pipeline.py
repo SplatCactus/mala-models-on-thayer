@@ -20,18 +20,16 @@ Run
 Writes data/snapshots/routing_table.json (served by src/api/main.py) and
 data/snapshots/fairness_report.json (mic-drop-slide numbers).
 
-RISK-LABEL POLARITY (confirmed by Chris, 2026-07-04)
------------------------------------------------------
-The model's predicted_risk must be "higher number = higher risk," using
-the standard 0.80 PDC adherence threshold to define the at-risk positive
-class: y=1 iff pdc_180d < 0.80 (below the CMS/PQA adherence cutoff).
-
-This is the OPPOSITE polarity from classifier.py's own default
-(`load_classification_frame`'s default binarizes pdc_180d >= 0.80 as the
-positive class, i.e. y=1 there means *adherent*). We deliberately do NOT
-call that default here -- see `build_risk_label` below, which builds the
-label directly from pdc_180d with the confirmed at-risk-positive polarity.
-See also the matching note on SHAPRunner.fit() in shap_runner.py.
+RISK-LABEL POLARITY (target corrected 2026-07-22)
+--------------------------------------------------
+The model's predicted_risk must be "higher number = higher risk." The
+at-risk positive class is the DISCONTINUATION EVENT itself: y=1 iff
+``has_30_day_gap == 1`` (a >=30-day uncovered stretch in the 180-day
+post-index window). This replaces the earlier ``pdc_180d < 0.80`` proxy --
+the two coincide for all but 6/16205 patients here, but the gap event is
+the outcome we actually predict, so we label it directly. This matches
+classifier.py's default now (both event-positive), so predicted_risk =
+P(event); see the matching note on SHAPRunner.fit() in shap_runner.py.
 
 DAYS-TO-PREDICTED-BREAK (new derivation -- not computed anywhere else)
 ------------------------------------------------------------------------
@@ -92,6 +90,8 @@ OUTPUT_PATH = ROOT / "data" / "snapshots" / "routing_table.json"
 FAIRNESS_OUTPUT_PATH = ROOT / "data" / "snapshots" / "fairness_report.json"
 
 # Chris-confirmed: below this pdc_180d cutoff = "at risk" (y=1).
+# Retained for reference only -- the risk label is now the has_30_day_gap event
+# directly (see build_risk_label), not a PDC threshold.
 PDC_RISK_THRESHOLD = 0.80
 # Matches pdc.py's forward outcome window -- see module docstring re:
 # days_to_predicted_break derivation.
@@ -121,24 +121,25 @@ def load_panel_and_labels(
     frame = panel.merge(labels, on="patient_id", how="inner")
 
     n_before = len(frame)
-    frame = frame.dropna(subset=["pdc_180d"]).reset_index(drop=True)
+    frame = frame.dropna(subset=["has_30_day_gap"]).reset_index(drop=True)
     n_dropped = n_before - len(frame)
     if n_dropped:
         log.warning(
-            "  dropping %d/%d patient(s) with unlabeled pdc_180d", n_dropped, n_before
+            "  dropping %d/%d patient(s) with unlabeled has_30_day_gap", n_dropped, n_before
         )
     if frame.empty:
-        raise ValueError("no patients with a labeled pdc_180d outcome -- nothing to route")
+        raise ValueError("no patients with a labeled has_30_day_gap outcome -- nothing to route")
     return frame
 
 
 def build_risk_label(frame: pd.DataFrame) -> np.ndarray:
-    """At-risk-positive binary label: y=1 iff pdc_180d < PDC_RISK_THRESHOLD.
+    """At-risk-positive binary label: y=1 iff has_30_day_gap == 1.
 
-    See module docstring "RISK-LABEL POLARITY" -- this is deliberately the
-    opposite of classifier.py's default binarization.
+    The >=30-day discontinuation gap is the event we route on (see module
+    docstring "RISK-LABEL POLARITY"). Congruent with classifier.py's default;
+    both are event-positive, so predicted_risk = P(gap event).
     """
-    return (frame["pdc_180d"].to_numpy() < PDC_RISK_THRESHOLD).astype(int)
+    return (frame["has_30_day_gap"].to_numpy() == 1).astype(int)
 
 
 def _compute_fairness(
@@ -192,8 +193,8 @@ def run(
 
     y_risk = build_risk_label(frame)
     log.info(
-        "  %d/%d patients at risk (pdc_180d < %.2f)",
-        int(y_risk.sum()), len(y_risk), PDC_RISK_THRESHOLD,
+        "  %d/%d patients at risk (has_30_day_gap == 1)",
+        int(y_risk.sum()), len(y_risk),
     )
 
     log.info("Fitting SHAPRunner (linear risk model, at-risk-positive polarity)...")

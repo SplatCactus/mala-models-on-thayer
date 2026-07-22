@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(COHORT_PARQUET_DIR=\"data/parquet\" COHORT_OUT=\"data/snapshots/cohort_patients_1k.parquet\" ./venv/Scripts/python.exe src/etl/cohort.py)",
+      "Bash(BF_PARQUET_DIR=data/parquet BF_COHORT_PATH=data/snapshots/cohort_patients_1k.parquet BF_VITALS_PATH=data/parquet/observations.parquet BF_OUTPUT_PATH=feature_panel_1k.parquet BF_LABELS_PATH=labels_1k.parquet ./venv/Scripts/python.exe -u src/features/build_features.py)",
+      "WebSearch",
+      "WebFetch(domain:www.mtm-inc.net)",
+      "WebFetch(domain:www.modivcare.com)",
+      "WebFetch(domain:rules.sos.ri.gov)",
+      "WebFetch(domain:uniteus.com)",
+      "WebFetch(domain:riqi.org)"
+    ]
+  }
+}

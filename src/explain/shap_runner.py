@@ -183,17 +183,16 @@ class SHAPRunner:
         we reindex). y is a binary label: 1 = discontinued/non-persistent
         (i.e. AT RISK), 0 = persistent/adherent.
 
-        RISK POLARITY (confirmed by Chris, 2026-07-04): predicted_risk must
-        be "higher number = higher risk," using the standard 0.80 PDC
-        adherence threshold to define the positive class -- y=1 iff
-        pdc_180d < 0.80 (below the CMS/PQA adherence cutoff = at risk).
-        This is the OPPOSITE polarity from classifier.py's own default
-        (`load_classification_frame`'s default binarizes pdc_180d >= 0.80
-        as the positive class, i.e. y=1 there means *adherent*). Callers
-        of this class (see src/run_routing_pipeline.py) must build y with
-        the at-risk-positive polarity documented here -- this class does
-        not re-derive or flip the label itself, so passing the wrong
-        polarity in silently inverts every downstream routing decision.
+        RISK POLARITY (target corrected 2026-07-22): predicted_risk must
+        be "higher number = higher risk." The positive class is the
+        discontinuation EVENT itself -- y=1 iff has_30_day_gap == 1 (a
+        >=30-day uncovered stretch in the 180-day window). This now MATCHES
+        classifier.py's default (both event-positive), replacing the earlier
+        ``pdc_180d < 0.80`` proxy (they coincide for all but ~6/16205
+        patients). Callers (see src/run_routing_pipeline.py) build y with
+        this event-positive polarity -- this class does not re-derive or
+        flip the label itself, so passing the wrong polarity in silently
+        inverts every downstream routing decision.
         """
         X = X[ALL_MODEL_FEATURES]
         X_imputed = self.imputer.fit_transform(X)

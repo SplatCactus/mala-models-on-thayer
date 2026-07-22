@@ -57,6 +57,13 @@
 
     --nav-h: 74px;
     --sp: 0; /* scroll progress 0→1, set from JS */
+
+    /* ── Feedback-loop status colors (State 1–4) ──────────────── */
+    --st-routed: #a2977f;
+    --st-ack: #d2720a;
+    --st-actioned: #6f5bd6;
+    --st-observed: #0fa391;
+    --st-break: #e4585f;
   }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
@@ -873,6 +880,79 @@
     *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
     html { scroll-behavior: auto; }
   }
+  /* ── Feedback loop: closure banner ──────────────────────────── */
+  .loop-banner {
+    display: flex; align-items: center; gap: 1.1rem; flex-wrap: wrap;
+    background: linear-gradient(100deg, var(--card) 0%, var(--card-warm) 100%);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow-sm); padding: 0.95rem 1.3rem; margin: 0.2rem 0 1rem;
+  }
+  .loop-banner.hidden { display: none; }
+  .loop-title { font-family: var(--font-display); font-weight: 700; font-size: 13px;
+    letter-spacing: .02em; color: var(--text-primary); margin-right: .2rem; }
+  .loop-funnel { display: flex; align-items: center; gap: .55rem; flex-wrap: wrap; }
+  .loop-step { display: flex; align-items: baseline; gap: .4rem; }
+  .loop-num { font-family: var(--font-display); font-weight: 700; font-size: 20px; line-height: 1; }
+  .loop-num.routed { color: var(--st-routed); }
+  .loop-num.reached { color: var(--st-actioned); }
+  .loop-num.closed { color: var(--st-observed); }
+  .loop-lbl { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; }
+  .loop-arrow { color: var(--text-muted); font-size: 14px; }
+  .loop-rate { margin-left: auto; display: flex; align-items: baseline; gap: .45rem;
+    padding-left: 1.1rem; border-left: 1px solid var(--border); }
+  .loop-rate-val { font-family: var(--font-display); font-weight: 800; font-size: 24px;
+    color: var(--st-observed); line-height: 1; }
+  .loop-rate-lbl { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; }
+
+  /* ── Feedback loop: status column ───────────────────────────── */
+  .status-cell { white-space: nowrap; }
+  .status-select {
+    font-family: var(--font-ui); font-size: 12px; font-weight: 600;
+    padding: 5px 26px 5px 10px; border-radius: 999px; cursor: pointer;
+    border: 1.5px solid var(--border-strong); background: var(--card);
+    color: var(--text-secondary); appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M2 3.5 L5 6.5 L8 3.5' stroke='%23a2977f' stroke-width='1.8' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 9px center;
+    transition: border-color .15s, color .15s, background-color .15s;
+  }
+  .status-select.st-routed { color: var(--st-routed); border-color: var(--border-strong); }
+  .status-select.st-acknowledged { color: var(--st-ack); border-color: color-mix(in srgb, var(--st-ack) 45%, var(--border)); background: #fdf3e6; }
+  .status-select.st-actioned { color: var(--st-actioned); border-color: color-mix(in srgb, var(--st-actioned) 45%, var(--border)); background: #efecfb; }
+  .status-select:disabled { opacity: .8; cursor: default; }
+  .outcome-chip { display: inline-flex; align-items: center; gap: 4px; margin-top: 5px;
+    font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+  .outcome-chip.ontime { color: var(--st-observed); background: var(--pharmacist-bg); }
+  .outcome-chip.break { color: var(--st-break); background: var(--social-bg); }
+  .intervention-tag { display: block; margin-top: 4px; font-size: 10.5px; color: var(--text-muted); }
+
+  /* ── Feedback loop: Mark-actioned modal ─────────────────────── */
+  .modal-overlay { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center;
+    justify-content: center; padding: 1.2rem; background: rgba(35, 29, 21, 0.42);
+    backdrop-filter: blur(3px); animation: modalFade .18s var(--ease-out); }
+  .modal-overlay[hidden] { display: none; }
+  .modal { width: min(480px, 100%); background: var(--card); border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg); border: 1px solid var(--border); padding: 1.5rem 1.6rem 1.4rem;
+    animation: modalPop .22s var(--ease-spring); max-height: 90vh; overflow-y: auto; }
+  .modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+  .modal-head h3 { font-family: var(--font-display); font-size: 18px; font-weight: 700; margin: 0; color: var(--text-primary); }
+  .modal-x { border: none; background: none; font-size: 22px; line-height: 1; color: var(--text-muted); cursor: pointer; padding: 0 4px; }
+  .modal-patient { font-size: 12.5px; color: var(--text-secondary); margin: .3rem 0 1.1rem; }
+  .modal-patient b { color: var(--text-primary); }
+  .modal label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--text-secondary); margin: .85rem 0 .35rem; }
+  .modal select, .modal input, .modal textarea {
+    width: 100%; font-family: var(--font-ui); font-size: 13.5px; color: var(--text-primary);
+    padding: 9px 11px; border: 1.5px solid var(--border-strong); border-radius: 10px;
+    background: var(--card-warm); }
+  .modal textarea { resize: vertical; min-height: 54px; }
+  .modal select:focus, .modal input:focus, .modal textarea:focus { outline: none; border-color: var(--st-actioned); }
+  .modal-actions { display: flex; justify-content: flex-end; gap: .6rem; margin-top: 1.3rem; }
+  .modal-btn { font-family: var(--font-ui); font-size: 13px; font-weight: 700; padding: 9px 18px;
+    border-radius: 10px; cursor: pointer; border: 1.5px solid var(--border-strong); background: var(--card); color: var(--text-secondary); }
+  .modal-btn.primary { background: var(--st-observed); border-color: var(--st-observed); color: #fff; }
+  .modal-note { font-size: 11px; color: var(--text-muted); margin-top: .9rem; line-height: 1.45; }
+  @keyframes modalFade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes modalPop { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
 </style>
 </head>
 <body>
@@ -921,6 +1001,7 @@
 
   <div class="meta-bar" id="meta-bar"></div>
   <div class="sync-badge" id="sync-badge"></div>
+  <div class="loop-banner hidden" id="loop-banner"></div>
 
   <section class="toolbar" id="toolbar" aria-label="Legend and filters">
     <div class="legend-row">
@@ -979,6 +1060,30 @@
 
 </div>
 
+<!-- Feedback loop: Mark-actioned modal (State 3). Manual record-entry of the
+     real RI intervention; option values are stable keys so a future adapter
+     (MTM booking API, Unite Us referral, etc.) can map onto them. -->
+<div class="modal-overlay" id="modal-overlay" hidden onclick="if(event.target===this)closeModal()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-head">
+      <h3 id="modal-title">Mark actioned</h3>
+      <button class="modal-x" aria-label="Close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-patient" id="modal-patient"></div>
+    <label id="modal-lbl-intervention" for="modal-intervention">Intervention</label>
+    <select id="modal-intervention"></select>
+    <label id="modal-lbl-ref" for="modal-ref">Reference #</label>
+    <input id="modal-ref" type="text" autocomplete="off" placeholder="e.g. MTM #9131">
+    <label id="modal-lbl-note" for="modal-note">Notes</label>
+    <textarea id="modal-note" placeholder=""></textarea>
+    <p class="modal-note" id="modal-hint"></p>
+    <div class="modal-actions">
+      <button class="modal-btn" id="modal-cancel" onclick="closeModal()">Cancel</button>
+      <button class="modal-btn primary" id="modal-save" onclick="saveActioned()">Mark actioned</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const API_BASE = "http://localhost:8000";
 
@@ -1030,7 +1135,37 @@ const STRINGS = {
     syncLastSynced: "Last synced",
     syncJustNow: "just now",
     syncSecondsAgo: (n) => `${n}s ago`,
-    syncMinutesAgo: (n) => `${n}m ago`
+    syncMinutesAgo: (n) => `${n}m ago`,
+    colStatus: "Status",
+    statusRouted: "Routed",
+    statusAcknowledged: "Acknowledged",
+    statusActioned: "Actioned",
+    statusObserved: "Outcome observed",
+    outcomeOnTime: "On-time refill ✓",
+    outcomeBreak: "Confirmed break ✗",
+    outcomePending: "Awaiting refill",
+    loopTitle: "Loop closure",
+    loopRouted: "routed",
+    loopReached: "reached",
+    loopClosed: "confirmed refills",
+    loopRate: "closure rate",
+    modalTitle: "Mark actioned",
+    modalPatient: (id, driver) => `Patient <b>${id}</b> · barrier: ${driver}`,
+    modalIntervention: "Intervention taken",
+    modalRef: "Reference #",
+    modalNote: "Notes (optional)",
+    modalCancel: "Cancel",
+    modalSave: "Mark actioned",
+    modalHint: "Recorded locally for this demo. The loop only CLOSES on an objective refill (State 4) — never on this entry. Real routing would ride Unite Rhode Island (Unite Us); transport via MTM (855-330-9131).",
+    interventions: {
+      transport_mtm: "MTM NEMT ride booked",
+      transport_ripta: "RIPTA bus pass issued",
+      language_chw: "Bilingual CHW home visit",
+      food_snap: "HEZ SNAP / food-bank referral",
+      refill_sync: "90-day mail / auto-refill sync",
+      referral_uniteus: "Unite RI closed-loop referral",
+      other: "Other"
+    }
   },
   es: {
     title: "Lista de trabajo CHW",
@@ -1079,7 +1214,37 @@ const STRINGS = {
     syncLastSynced: "Última sincronización",
     syncJustNow: "justo ahora",
     syncSecondsAgo: (n) => `hace ${n}s`,
-    syncMinutesAgo: (n) => `hace ${n}m`
+    syncMinutesAgo: (n) => `hace ${n}m`,
+    colStatus: "Estado",
+    statusRouted: "Enviado",
+    statusAcknowledged: "Reconocido",
+    statusActioned: "Atendido",
+    statusObserved: "Resultado observado",
+    outcomeOnTime: "Recarga a tiempo ✓",
+    outcomeBreak: "Interrupción confirmada ✗",
+    outcomePending: "Esperando recarga",
+    loopTitle: "Cierre del ciclo",
+    loopRouted: "enviados",
+    loopReached: "contactados",
+    loopClosed: "recargas confirmadas",
+    loopRate: "tasa de cierre",
+    modalTitle: "Marcar como atendido",
+    modalPatient: (id, driver) => `Paciente <b>${id}</b> · barrera: ${driver}`,
+    modalIntervention: "Intervención realizada",
+    modalRef: "N.º de referencia",
+    modalNote: "Notas (opcional)",
+    modalCancel: "Cancelar",
+    modalSave: "Marcar como atendido",
+    modalHint: "Registrado localmente para esta demo. El ciclo solo se CIERRA con una recarga objetiva (Estado 4), nunca con esta entrada. El enrutamiento real usaría Unite Rhode Island (Unite Us); transporte vía MTM (855-330-9131).",
+    interventions: {
+      transport_mtm: "Viaje NEMT de MTM reservado",
+      transport_ripta: "Pase de autobús RIPTA emitido",
+      language_chw: "Visita domiciliaria de CHW bilingüe",
+      food_snap: "Referido a SNAP / banco de alimentos (HEZ)",
+      refill_sync: "Sincronización de recarga por correo (90 días)",
+      referral_uniteus: "Referido de ciclo cerrado Unite RI",
+      other: "Otro"
+    }
   }
 };
 
@@ -1104,6 +1269,149 @@ const filters = {
   minRisk: 0,     // 0–100
   actions: new Set(ALL_ACTIONS)
 };
+
+/* ══════════════════════════════════════════════════════════════════════
+   FEEDBACK LOOP (States 1–4)
+   State 1 Routed / 2 Acknowledged / 3 Actioned are the CHW's subjective
+   progress — tracked CLIENT-SIDE in localStorage (per the demo's no-backend
+   choice). State 4 Outcome Observed is OBJECTIVE — it comes from the
+   server-side loop_outcome (src/sync/loop_closure.py, refill confirmed) and is
+   never set by hand: the loop closes only on an objective refill, never on
+   self-report. Actionable interventions are recorded manually now; option keys
+   are stable so a real adapter (Unite Rhode Island / Unite Us closed-loop
+   referrals, MTM NEMT) can map onto them later.
+   ══════════════════════════════════════════════════════════════════════ */
+const STORE_KEY = "bploop.state.v1";
+const INTERVENTION_KEYS = [
+  "transport_mtm", "transport_ripta", "language_chw",
+  "food_snap", "refill_sync", "referral_uniteus", "other"
+];
+// Default intervention suggested by the patient's top routing driver. Keys must
+// match DRIVER_LABELS in src/api/main.py.
+const DRIVER_DEFAULT_INTERVENTION = {
+  transport_barrier: "transport_mtm",
+  financial_barrier: "refill_sync",
+  low_education: "language_chw",
+  migrant_status: "language_chw",
+  isolation: "language_chw",
+  housing_barrier: "referral_uniteus",
+  bp_trend: "refill_sync",
+  trauma_exposure: "other"
+};
+
+function loadState() { try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch { return {}; } }
+function saveState(st) { localStorage.setItem(STORE_KEY, JSON.stringify(st)); }
+function getEntry(pid) { return loadState()[pid] || null; }
+function getStatus(pid) { const e = loadState()[pid]; return (e && e.status) ? e.status : "routed"; }
+function setEntry(pid, patch) { const st = loadState(); st[pid] = { ...(st[pid] || {}), ...patch }; saveState(st); }
+
+function interventionLabel(key) {
+  const s = STRINGS[currentLang];
+  return (s.interventions && s.interventions[key]) || key;
+}
+function defaultIntervention(driver) {
+  return DRIVER_DEFAULT_INTERVENTION[driver] || "other";
+}
+
+/* Status <select> + logged intervention tag + objective outcome chip. */
+function statusCellHtml(p) {
+  const s = STRINGS[currentLang];
+  const st = getStatus(p.patient_id);
+  const entry = getEntry(p.patient_id);
+  const opt = (v, lbl) => `<option value="${v}" ${st === v ? "selected" : ""}>${lbl}</option>`;
+  const select = `<select class="status-select st-${st}" onclick="event.stopPropagation()"
+      onchange="onStatusChange('${p.patient_id}', this.value, '${p.top_driver}')">
+      ${opt("routed", s.statusRouted)}${opt("acknowledged", s.statusAcknowledged)}${opt("actioned", s.statusActioned)}
+    </select>`;
+  let extra = "";
+  if (entry && entry.intervention) {
+    extra += `<span class="intervention-tag">${interventionLabel(entry.intervention)}${entry.ref ? " · " + entry.ref : ""}</span>`;
+  }
+  // State 4: only surfaces once the patient has been actioned AND an objective
+  // refill outcome exists — action first, then observe (never self-report).
+  if (st === "actioned" && p.loop_outcome && p.loop_outcome.observed) {
+    extra += p.loop_outcome.on_time_refill
+      ? `<span class="outcome-chip ontime">${s.outcomeOnTime}</span>`
+      : `<span class="outcome-chip break">${s.outcomeBreak}</span>`;
+  }
+  return `<td class="status-cell" onclick="event.stopPropagation()">${select}${extra}</td>`;
+}
+
+function onStatusChange(pid, value, driver) {
+  if (value === "actioned") { openActionModal(pid, driver); return; }  // commit on modal save
+  setEntry(pid, { status: value });
+  render();
+}
+
+/* Mark-actioned modal (State 3). */
+let modalPid = null;
+function openActionModal(pid, driver) {
+  const s = STRINGS[currentLang];
+  const p = worklistData.worklist.find(x => x.patient_id === pid);
+  modalPid = pid;
+  const driverLabel = p ? (currentLang === "es" ? p.driver_label_es : p.driver_label_en) : driver;
+  document.getElementById("modal-title").textContent = s.modalTitle;
+  document.getElementById("modal-patient").innerHTML = s.modalPatient(p ? p.display_name : pid, driverLabel);
+  document.getElementById("modal-lbl-intervention").textContent = s.modalIntervention;
+  document.getElementById("modal-lbl-ref").textContent = s.modalRef;
+  document.getElementById("modal-lbl-note").textContent = s.modalNote;
+  document.getElementById("modal-cancel").textContent = s.modalCancel;
+  document.getElementById("modal-save").textContent = s.modalSave;
+  document.getElementById("modal-hint").textContent = s.modalHint;
+  const iv = document.getElementById("modal-intervention");
+  iv.innerHTML = INTERVENTION_KEYS.map(k => `<option value="${k}">${s.interventions[k]}</option>`).join("");
+  const entry = getEntry(pid);
+  iv.value = (entry && entry.intervention) || defaultIntervention(driver);
+  document.getElementById("modal-ref").value = (entry && entry.ref) || "";
+  document.getElementById("modal-note").value = (entry && entry.note) || "";
+  document.getElementById("modal-overlay").hidden = false;
+}
+function closeModal() {
+  document.getElementById("modal-overlay").hidden = true;
+  modalPid = null;
+  render();  // resets the select back to the stored status if the user canceled
+}
+function saveActioned() {
+  if (!modalPid) return;
+  setEntry(modalPid, {
+    status: "actioned",
+    intervention: document.getElementById("modal-intervention").value,
+    ref: document.getElementById("modal-ref").value.trim(),
+    note: document.getElementById("modal-note").value.trim(),
+    at: new Date().toISOString()
+  });
+  document.getElementById("modal-overlay").hidden = true;
+  modalPid = null;
+  render();
+}
+
+/* Loop-closure funnel banner: N routed → X reached → Y objectively confirmed. */
+function renderLoopBanner() {
+  const el = document.getElementById("loop-banner");
+  if (!worklistData) { el.classList.add("hidden"); return; }
+  const s = STRINGS[currentLang];
+  const list = worklistData.worklist;
+  let reached = 0, closed = 0;
+  for (const p of list) {
+    const st = getStatus(p.patient_id);
+    if (st === "acknowledged" || st === "actioned") reached++;
+    if (st === "actioned" && p.loop_outcome && p.loop_outcome.observed && p.loop_outcome.on_time_refill) closed++;
+  }
+  const N = list.length;
+  const rate = N ? Math.round((closed / N) * 100) : 0;
+  el.classList.remove("hidden");
+  el.innerHTML = `
+    <span class="loop-title">${s.loopTitle}</span>
+    <div class="loop-funnel">
+      <span class="loop-step"><span class="loop-num routed">${N}</span><span class="loop-lbl">${s.loopRouted}</span></span>
+      <span class="loop-arrow">→</span>
+      <span class="loop-step"><span class="loop-num reached">${reached}</span><span class="loop-lbl">${s.loopReached}</span></span>
+      <span class="loop-arrow">→</span>
+      <span class="loop-step"><span class="loop-num closed">${closed}</span><span class="loop-lbl">${s.loopClosed}</span></span>
+    </div>
+    <span class="loop-rate"><span class="loop-rate-val">${rate}%</span><span class="loop-rate-lbl">${s.loopRate}</span></span>
+  `;
+}
 
 /* ── Hero animation: plays on initial load and language toggle only ── */
 function playHero() {
@@ -1356,6 +1664,7 @@ function render(mode = "full") {
   document.getElementById("legend-chw").textContent = s.legendChw;
   syncToolbarLabels(s);
   renderSyncBadge();
+  renderLoopBanner();
 
   if (!worklistData) return;
 
@@ -1434,6 +1743,7 @@ function render(mode = "full") {
         </td>
         <td class="driver-label">${driverLabel}</td>
         <td><span class="action-pill action-${p.routed_action}">${actionLabel(p.routed_action)}</span></td>
+        ${statusCellHtml(p)}
         <td>
           <button class="expand-btn ${isExpanded ? "open" : ""}" onclick="event.stopPropagation();toggleScript('${p.patient_id}')">
             <span class="eb-label">${isExpanded ? s.hideScript : s.viewScript}</span>
@@ -1442,7 +1752,7 @@ function render(mode = "full") {
         </td>
       </tr>
       <tr class="script-row ${isExpanded ? "open" : ""}" data-id="${p.patient_id}">
-        <td colspan="7">
+        <td colspan="8">
           <div class="drawer"><div class="drawer-inner">
             <div class="script-panel">
               <div class="script-label">${s.outreachScript}</div>
@@ -1467,6 +1777,7 @@ function render(mode = "full") {
           <col class="c-risk">
           <col class="c-driver">
           <col class="c-action">
+          <col class="c-status">
           <col class="c-script">
         </colgroup>
         <thead>
@@ -1477,6 +1788,7 @@ function render(mode = "full") {
             <th class="sortable ${sortKey === "risk_score" ? "sorted" : ""}" onclick="sortBy('risk_score')">${s.colRisk}${sortIndicator("risk_score")}</th>
             <th>${s.colDriver}</th>
             <th>${s.colAction}</th>
+            <th>${s.colStatus}</th>
             <th>${s.colScript}</th>
           </tr>
         </thead>

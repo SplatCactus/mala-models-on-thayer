@@ -1,6 +1,8 @@
 {
   "meta": {
-    "generated_at": "2026-07-05T04:37:41.634567Z",
+    "generated_at": "2026-07-22T17:38:33.573929Z",
+    "data_source": "synthetic (batch)",
+    "last_synced": "2026-07-22T17:38:33.573929Z",
     "routing_table_version": 1,
     "cohort_size": 16205,
     "role_caps_used": {

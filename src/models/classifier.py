@@ -9,11 +9,21 @@ The primary model is now a **gradient-boosted decision tree**
 (:func:`build_hist_gradient_boosting`, sklearn ``HistGradientBoostingClassifier``).
 For tabular EHR data — mixed-scale numeric features, binary flags, native
 missingness, non-linear interactions — GBDT is the correct default, and it wins
-empirically: honest out-of-fold ROC-AUC is **HGB ~0.65 vs logistic 0.58 /
-random forest 0.63** (see src/eval/run_auc.py). Logistic regression is kept as a
-lightweight, interpretable baseline; the shallow random forest is kept only as a
-labeled baseline — it is strictly dominated by HGB and its ``max_depth=12``
-overfits badly (in-sample ROC-AUC 0.93 vs out-of-fold 0.63).
+empirically. On the enriched 33-feature panel (BP trajectory + SDOH + the
+pre-index cross-drug behavioral features in src/features/pre_index.py), honest
+out-of-fold ROC-AUC is **HGB 0.848 vs random forest 0.837 / logistic 0.681**
+(see src/eval/run_auc.py). Logistic regression is kept as a lightweight,
+interpretable baseline; the shallow random forest is kept only as a labeled
+baseline — it is dominated by HGB and its ``max_depth=12`` overfits badly
+(in-sample ROC-AUC 0.93).
+
+The jump from the BP/SDOH-only panel (HGB 0.643) is driven by feature richness,
+NOT architecture: the pre-index cross-drug refill/tenure/engagement features are
+each individually weak (max univariate |AUC-0.5| ~0.15, so no single-feature
+outcome leak) but combine strongly. Caveat: Synthea models medication adherence
+as a stable per-patient trait, so pre-index non-antihypertensive refill behavior
+predicts post-index antihypertensive adherence more cleanly than it would on
+real EHR data — treat 0.848 as a synthetic-data ceiling, not a real-world one.
 
 The original 2026-07-02 rationale said "simple, low-variance models only --
 Logistic Regression or a shallow Random Forest; hold off on XGBoost/neural nets
@@ -115,7 +125,7 @@ def load_classification_frame(
     labels_path: Path,
     *,
     patient_id_col: str = "patient_id",
-    label_col: str = "pdc_180d",
+    label_col: str = "has_30_day_gap",
     pdc_threshold: float = PDC_ADHERENCE_THRESHOLD,
 ) -> tuple[pd.DataFrame, np.ndarray, pd.Series]:
     """Load X (features) and y (binary label) for the whole cohort, no split file.
@@ -124,15 +134,21 @@ def load_classification_frame(
     data/snapshots/splits.parquet -- K-fold CV re-splits the full cohort at
     training time instead of relying on a frozen partition.
 
-    Target
-    ------
-    Defaults to a PDC-thresholded adherence label: ``y = (pdc_180d >=
-    pdc_threshold)``, with ``pdc_threshold`` the standard 0.80 cutoff, so
-    ``y=1`` means *adherent*. Any continuous label column (values not already
-    in {0, 1}) is binarized the same way; an already-binary column such as
-    ``has_30_day_gap`` is taken as-is -- pass ``label_col="has_30_day_gap"``
-    to recover the old discontinuation-gap target (where ``y=1`` means a gap,
-    the opposite polarity).
+    Target (updated 2026-07-22)
+    ---------------------------
+    Defaults to ``has_30_day_gap`` -- the discontinuation event we actually
+    predict: ``y=1`` iff the patient has a >=30-day uncovered stretch in the
+    180-day post-index window (an already-binary column, taken as-is). This is
+    the EVENT-positive polarity (y=1 = the bad outcome), congruent with the
+    routing pipeline's at-risk label and with predicted_risk = P(event).
+
+    Why not ``pdc_180d >= 0.80``? That older default made ``y=1`` mean *adherent*
+    (the opposite polarity), which forced every downstream metric to flip via
+    ``1-y``. In this cohort the two coincide for all but 6/16205 patients (a
+    low-PDC patient on 30-day fills essentially always has one >=30-day gap), so
+    the numbers are unchanged -- but the gap target is the congruent framing.
+    Pass ``label_col="pdc_180d"`` to recover the continuous-PDC threshold label
+    (binarized at ``pdc_threshold``, ``y=1`` = adherent).
 
     Returns
     -------
@@ -192,8 +208,9 @@ def build_hist_gradient_boosting(**overrides) -> Pipeline:
 
     GBDT is the right default for tabular EHR data: it handles mixed-scale
     numeric + binary-flag features, native missingness, and non-linear feature
-    interactions, and it is the empirical winner (out-of-fold ROC-AUC ~0.65 vs
-    logistic 0.58 / random forest 0.63; see src/eval/run_auc.py).
+    interactions, and it is the empirical winner (out-of-fold ROC-AUC 0.848 vs
+    random forest 0.837 / logistic 0.681 on the 33-feature panel; see
+    src/eval/run_auc.py).
 
     No ``SimpleImputer``/``StandardScaler`` in the pipeline, unlike the logistic
     baseline: ``HistGradientBoostingClassifier`` bins features internally, so it
@@ -300,10 +317,10 @@ def run_stratified_cv(
 def main() -> int:
     log.info("Loading classification frame...")
     X, y, _ = load_classification_frame(PANEL_PATH, LABELS_PATH)
-    log.info("  %d patients x %d features, %d/%d positive (adherent, pdc_180d >= %.2f, %.1f%%)",
-              *X.shape, int(y.sum()), len(y), PDC_ADHERENCE_THRESHOLD, 100 * y.mean())
+    log.info("  %d patients x %d features, %d/%d positive (has_30_day_gap = the >=30d "
+             "discontinuation event, %.1f%%)", *X.shape, int(y.sum()), len(y), 100 * y.mean())
 
-    baseline_pr_auc = float(y.mean())  # a no-skill classifier's expected PR-AUC
+    baseline_pr_auc = float(y.mean())  # a no-skill classifier's expected PR-AUC (event rate)
     log.info("  no-skill baseline PR-AUC (positive rate): %.3f", baseline_pr_auc)
 
     for name, build_fn in MODEL_BUILDERS.items():
