@@ -71,7 +71,12 @@ OUTPUT_PATH = ROOT / "data" / "snapshots" / "routing_table.json"
 # duplicated (not imported) because this is a separate, sync-specific entry
 # point and importing run_routing_pipeline.py's module-level code would
 # re-run its own script-style setup. Keep these in sync if either changes.
-PDC_RISK_THRESHOLD = 0.80
+#
+# UPDATED 2026-07-22 to match run_routing_pipeline.py's target correction:
+# the at-risk positive class is has_30_day_gap == 1 directly (the event we
+# route on), not the older pdc_180d < 0.80 proxy -- the two coincide for all
+# but ~6/16205 patients, but the gap event is congruent with classifier.py's
+# now-default polarity too. See that module's "RISK-LABEL POLARITY" note.
 FORWARD_WINDOW_DAYS = 180
 DATA_SOURCE_LABEL = "synthetic (demo)"
 
@@ -89,7 +94,7 @@ def load_full_frame(panel_path: Path = PANEL_PATH, labels_path: Path = LABELS_PA
     panel = pd.read_parquet(panel_path)
     labels = pd.read_parquet(labels_path)
     frame = panel.merge(labels, on="patient_id", how="inner")
-    frame = frame.dropna(subset=["pdc_180d"]).reset_index(drop=True)
+    frame = frame.dropna(subset=["has_30_day_gap"]).reset_index(drop=True)
     missing = [c for c in ALL_MODEL_FEATURES if c not in frame.columns]
     if missing:
         raise KeyError(f"feature panel is missing expected model columns: {missing}")
@@ -97,9 +102,9 @@ def load_full_frame(panel_path: Path = PANEL_PATH, labels_path: Path = LABELS_PA
 
 
 def build_risk_label(frame: pd.DataFrame):
-    """At-risk-positive label: y=1 iff pdc_180d < PDC_RISK_THRESHOLD (see
+    """At-risk-positive label: y=1 iff has_30_day_gap == 1 (see
     run_routing_pipeline.py's "RISK-LABEL POLARITY" note -- same polarity)."""
-    return (frame["pdc_180d"].to_numpy() < PDC_RISK_THRESHOLD).astype(int)
+    return (frame["has_30_day_gap"].to_numpy() == 1).astype(int)
 
 
 def score_and_route(frame_subset: pd.DataFrame, runner: SHAPRunner, engine: RoutingRuleEngine):
@@ -113,7 +118,7 @@ def score_and_route(frame_subset: pd.DataFrame, runner: SHAPRunner, engine: Rout
 def run_sync_loop(
     source: PharmacyRefillSource,
     *,
-    interval_seconds: float = 8.0,
+    interval_seconds: float = 5.0,
     role_caps: Optional[Dict[str, int]] = None,
     max_ticks: Optional[int] = None,
     output_path: Path = OUTPUT_PATH,
@@ -129,8 +134,8 @@ def run_sync_loop(
     y_risk = build_risk_label(frame)
     runner = SHAPRunner()
     runner.fit(frame, y_risk)
-    log.info("  fitted on %d patients, %d at risk (pdc_180d < %.2f)",
-              len(frame), int(y_risk.sum()), PDC_RISK_THRESHOLD)
+    log.info("  fitted on %d patients, %d at risk (has_30_day_gap == 1)",
+              len(frame), int(y_risk.sum()))
 
     engine = RoutingRuleEngine()
     cap_engine = CapacityEngine(role_caps=role_caps)
@@ -173,7 +178,7 @@ def run_sync_loop(
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--interval", type=float, default=8.0, help="seconds between polls")
+    ap.add_argument("--interval", type=float, default=5.0, help="seconds between polls")
     ap.add_argument("--batch-size", type=int, default=25, help="patients revealed per tick")
     ap.add_argument("--seed", type=int, default=0, help="reveal-order seed (reproducible demo)")
     ap.add_argument("--max-ticks", type=int, default=None, help="stop after N ticks (omit to run forever)")
