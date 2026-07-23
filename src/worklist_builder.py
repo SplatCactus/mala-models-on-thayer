@@ -29,7 +29,8 @@ WorklistCard fields (per patient):
   patient_id, action, secondary_action, requires_human_review,
   is_safety_override, priority_score, rank_in_role,
   days_to_predicted_break, predicted_risk,
-  script: { en: {label, rationale}, es: {label, rationale} }
+  script: { en: {label, rationale}, es: {label, rationale},
+            pt: {label, rationale}, ht: {label, rationale} }
 """
 
 from __future__ import annotations
@@ -47,9 +48,18 @@ from src.routing.capacity import CapacityResult, WorklistEntry
 DEFAULT_DATA_SOURCE = "synthetic (batch)"
 
 ACTION_LABELS = {
-    "pharmacist": {"en": "Pharmacist Review", "es": "Revisión de Farmacéutico"},
-    "social_worker": {"en": "Social Worker Outreach", "es": "Contacto de Trabajo Social"},
-    "chw_call": {"en": "CHW Call", "es": "Llamada de CHW"},
+    "pharmacist": {
+        "en": "Pharmacist Review", "es": "Revisión de Farmacéutico",
+        "pt": "Revisão do Farmacêutico", "ht": "Revizyon Famasyen",
+    },
+    "social_worker": {
+        "en": "Social Worker Outreach", "es": "Contacto de Trabajo Social",
+        "pt": "Contacto do Assistente Social", "ht": "Kontak Travayè Sosyal",
+    },
+    "chw_call": {
+        "en": "CHW Call", "es": "Llamada de CHW",
+        "pt": "Chamada do CHW", "ht": "Apèl CHW",
+    },
 }
 
 
@@ -76,6 +86,14 @@ def _card(entry: WorklistEntry) -> dict:
             "es": {
                 "label": ACTION_LABELS[entry.action]["es"],
                 "rationale": d.rationale_es,
+            },
+            "pt": {
+                "label": ACTION_LABELS[entry.action]["pt"],
+                "rationale": d.rationale_pt,
+            },
+            "ht": {
+                "label": ACTION_LABELS[entry.action]["ht"],
+                "rationale": d.rationale_ht,
             },
         },
     }

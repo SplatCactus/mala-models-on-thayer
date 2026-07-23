@@ -63,21 +63,45 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Short bilingual display labels per driver, for the dashboard's "top
+# Short multilingual display labels per driver, for the dashboard's "top
 # driver" column. routing_table.yaml only carries full audit-rationale
-# sentences (rationale_en/es), not short labels, so these are defined
+# sentences (rationale_en/es/pt/ht), not short labels, so these are defined
 # here rather than invented in routing_table.yaml (which is meant to stay
 # a clinical-rules document, not a UI-copy document). Keys must match
 # routing_table.yaml's `drivers:` + `safety_overrides:` keys exactly.
 DRIVER_LABELS = {
-    "housing_barrier": {"en": "Housing instability", "es": "Inestabilidad de vivienda"},
-    "financial_barrier": {"en": "Financial barrier", "es": "Barrera financiera"},
-    "transport_barrier": {"en": "Transportation barrier", "es": "Barrera de transporte"},
-    "isolation": {"en": "Social isolation", "es": "Aislamiento social"},
-    "low_education": {"en": "Health literacy / education", "es": "Alfabetización en salud"},
-    "migrant_status": {"en": "Migrant status", "es": "Estatus migratorio"},
-    "bp_trend": {"en": "Blood pressure trend", "es": "Tendencia de presión arterial"},
-    "trauma_exposure": {"en": "Trauma exposure (safety)", "es": "Exposición a trauma (seguridad)"},
+    "housing_barrier": {
+        "en": "Housing instability", "es": "Inestabilidad de vivienda",
+        "pt": "Instabilidade habitacional", "ht": "Enstabilite lojman",
+    },
+    "financial_barrier": {
+        "en": "Financial barrier", "es": "Barrera financiera",
+        "pt": "Barreira financeira", "ht": "Baryè finansye",
+    },
+    "transport_barrier": {
+        "en": "Transportation barrier", "es": "Barrera de transporte",
+        "pt": "Barreira de transporte", "ht": "Baryè transpò",
+    },
+    "isolation": {
+        "en": "Social isolation", "es": "Aislamiento social",
+        "pt": "Isolamento social", "ht": "Izolman sosyal",
+    },
+    "low_education": {
+        "en": "Health literacy / education", "es": "Alfabetización en salud",
+        "pt": "Literacia em saúde / educação", "ht": "Konesans sou sante / edikasyon",
+    },
+    "migrant_status": {
+        "en": "Migrant status", "es": "Estatus migratorio",
+        "pt": "Estatuto migratório", "ht": "Estati imigran",
+    },
+    "bp_trend": {
+        "en": "Blood pressure trend", "es": "Tendencia de presión arterial",
+        "pt": "Tendência da pressão arterial", "ht": "Tandans tansyon",
+    },
+    "trauma_exposure": {
+        "en": "Trauma exposure (safety)", "es": "Exposición a trauma (seguridad)",
+        "pt": "Exposição a trauma (segurança)", "ht": "Ekspozisyon a chòk (sekirite)",
+    },
 }
 
 
@@ -110,7 +134,12 @@ def _to_dashboard_view(payload: dict) -> dict:
         start = today + dt.timedelta(days=max(dtb - 3, 0))
         end = today + dt.timedelta(days=dtb + 3)
         driver = card["top_driver"]
-        labels = DRIVER_LABELS.get(driver, {"en": driver, "es": driver})
+        labels = DRIVER_LABELS.get(driver, {"en": driver, "es": driver, "pt": driver, "ht": driver})
+        # .get() with an EN fallback per language: a routing_table.json written
+        # before the pt/ht rollout (worklist_builder.py) only has "en"/"es" in
+        # card["script"], and would otherwise KeyError here exactly like the
+        # data_source/last_synced case above -- same fix, same reason.
+        script = card["script"]
 
         rows.append({
             "patient_id": card["patient_id"],
@@ -122,9 +151,13 @@ def _to_dashboard_view(payload: dict) -> dict:
             "top_driver": driver,
             "driver_label_en": labels["en"],
             "driver_label_es": labels["es"],
+            "driver_label_pt": labels.get("pt", labels["en"]),
+            "driver_label_ht": labels.get("ht", labels["en"]),
             "routed_action": card["action"],
-            "outreach_script_en": card["script"]["en"]["rationale"],
-            "outreach_script_es": card["script"]["es"]["rationale"],
+            "outreach_script_en": script["en"]["rationale"],
+            "outreach_script_es": script["es"]["rationale"],
+            "outreach_script_pt": script.get("pt", script["en"])["rationale"],
+            "outreach_script_ht": script.get("ht", script["en"])["rationale"],
             "requires_human_review": card["requires_human_review"],
             "is_safety_override": card["is_safety_override"],
             "priority_score": card["priority_score"],
