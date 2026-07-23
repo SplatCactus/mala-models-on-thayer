@@ -21,13 +21,15 @@ export const SITE_CONTENT = {
     { value: "942", label: "capacity capped routes", note: "current committed routing snapshot" },
     { value: "4", label: "workflow states", note: "route to acknowledge to act to observe" },
     { value: "4", label: "supported languages", note: "English, Spanish, Portuguese, Haitian Creole" },
+    { value: "0.857", label: "out-of-fold ROC-AUC", note: "HistGradientBoosting · 33 leakage-safe features · 5-fold stratified CV" },
+    { value: "$1,176", label: "annual cost differential per patient", note: "adherent vs non-adherent, AHA cohort n=4.8M" },
   ],
   trustPoints: [
     {
       eyebrow: "Decision trace",
       title: "Human inspectable routing",
       body: "Versioned rules translate the leading modifiable driver into one accountable action. Safety overrides bypass automated ranking and require human review.",
-      code: "routing_table.yaml · v2",
+      code: "routing_table.yaml · v3",
     },
     {
       eyebrow: "Outcome integrity",
@@ -40,6 +42,18 @@ export const SITE_CONTENT = {
       title: "Leakage checks are executable",
       body: "Pre index features and forward window outcomes are separated by tests, with demographic fields held out of model features.",
       code: "tests/test_leakage.py",
+    },
+    {
+      eyebrow: "Legal grounding",
+      title: "Consent is scoped, not assumed",
+      body: "Rhode Island's CHCCIA is stricter than HIPAA: sharing with a non-covered entity requires the patient's own signed authorization, which an Accountable Entity cannot give on their behalf. Internal care coordination and external disclosure are separate scopes, gated per action, failing closed when authorization is missing or stale.",
+      code: "R.I. Gen. Laws § 5-37.3-4",
+    },
+    {
+      eyebrow: "Data reality",
+      title: "Built for lagged data, not fantasy",
+      body: "Surescripts medication history is prescriber-initiated and encounter-tied, and claims feeds lag 30 to 90 days. Escalation timers are adjusted for each source's latency, so a patient is never escalated for a refill that simply has not surfaced yet.",
+      code: "access_mode · prescriber_initiated",
     },
   ],
   workflow: {
@@ -83,6 +97,32 @@ export const SITE_CONTENT = {
     ["01", "Capacity honesty", "Role caps constrain the routed worklist so the product never creates an unusable intervention backlog."],
     ["02", "Human oversight", "Safety overrides are never dropped for capacity reasons and stay flagged for mandatory review before outreach."],
     ["03", "Objective closure", "The feedback loop closes only on an observed refill, not because a worker marked a task complete."],
+  ],
+  business: [
+    {
+      eyebrow: "Customer",
+      title: "Rhode Island Medicaid Accountable Entities",
+      body: "The buyers are RI Medicaid Accountable Entities and the managed care organizations that contract them — Providence Community Health Centers, Blackstone Valley Community Health Care, and Thundermist among them — covering roughly 208,800 attributed Medicaid lives statewide.",
+      code: "~208,800 attributed lives",
+    },
+    {
+      eyebrow: "Financial alignment",
+      title: "Protecting the shared-savings pool",
+      body: "Controlling High Blood Pressure is a mandatory core measure in the OHIC aligned measure set. An Accountable Entity's overall quality score multiplies its shared-savings pool, so preventing a medication gap protects that pool directly.",
+      code: "OHIC aligned measure set",
+    },
+    {
+      eyebrow: "Defensible economics",
+      title: "A number we can actually defend",
+      body: "A $1,176 annual cost differential between adherent and non-adherent hypertensive patients, times a realistic 5% absolute adherence lift, is about $59 gross cost avoidance per targeted patient per year. We do NOT claim closing one gap prevents a $20,000 stroke — baseline stroke incidence in this population is only 1.25–2%. Refusing the inflated number is the point.",
+      code: "$1,176 × 5% ≈ $59 / patient / yr",
+    },
+    {
+      eyebrow: "Local moat",
+      title: "Deep single-state integration",
+      body: "MTM Link for NEMT, Unite Rhode Island for closed-loop community referrals, Rhode Island's specific CHW billing constraints, and four languages matched to actual state demographics — depth a national vendor will not replicate. Rhode Island is the beachhead, not the ceiling.",
+      code: "MTM Link · Unite Rhode Island",
+    },
   ],
 };
 
@@ -279,6 +319,11 @@ export const MKT = {
     escEyebrow: "Provider-only escalation ladder", escH2: "When one nudge isn't enough, the loop escalates, not the patient.",
     escSub: "Each unresolved patient walks a three-round ladder, addressed only to providers, timed to a real pharmacy data source, and gated by consent at every step.",
     footerEscalation: "Escalation",
+    navBusiness: "Who pays",
+    bizEyebrow: "Business model", bizH2: "Who pays, and why it works.",
+    bizSub: "The clinical system is only half the product. Here is the customer, the money mechanism, the economics we will defend, and the moat.",
+    bizNonGoal: "A deliberate boundary: BP Cascade does not purchase transport or pay patient incentives. Paying for a Medicaid beneficiary's transport raises federal anti-kickback and beneficiary-inducement exposure. Rhode Island already funds NEMT through its statewide broker; our role is to make sure the existing benefit is actually used.",
+    bizSources: "Sources: OHIC Aligned Measure Set (Controlling High Blood Pressure); RI EOHHS Accountable Entity attribution; AHA hypertension cost-of-non-adherence literature (n≈4.8M); MTM Link (RI statewide NEMT broker); Unite Rhode Island (closed-loop referral network).",
     heroTitle: [{ t: "See" }, { t: "the" }, { t: "break" }, { br: 1 }, { t: "before", a: 1 }, { t: "it" }, { t: "happens." }],
     heroAria: "See the break before it happens.",
     heroLede: "BP Cascade RI turns a hypertension medication risk signal into a capacity aware care action, then holds the loop open until an objective refill is observed.",
@@ -319,6 +364,11 @@ export const MKT = {
     escEyebrow: "Escalera de escalamiento solo para profesionales", escH2: "Cuando un aviso no basta, escala el ciclo, no el paciente.",
     escSub: "Cada paciente sin resolver recorre una escalera de tres rondas, dirigida solo a profesionales, sincronizada con una fuente real de datos de farmacia y regulada por el consentimiento en cada paso.",
     footerEscalation: "Escalamiento",
+    navBusiness: "Quién paga",
+    bizEyebrow: "Modelo de negocio", bizH2: "Quién paga y por qué funciona.",
+    bizSub: "El sistema clínico es solo la mitad del producto. Aquí están el cliente, el mecanismo económico, la economía que defenderemos y el foso.",
+    bizNonGoal: "Un límite deliberado: BP Cascade no compra transporte ni paga incentivos a los pacientes. Pagar el transporte de un beneficiario de Medicaid expone a leyes federales anti-soborno e inducción de beneficiarios. Rhode Island ya financia el NEMT mediante su gestor estatal; nuestro papel es asegurar que el beneficio existente se use de verdad.",
+    bizSources: "Fuentes: Conjunto de Medidas Alineadas de OHIC (Control de la Hipertensión); atribución de Entidades Responsables de RI EOHHS; literatura de la AHA sobre el costo de la no adherencia en hipertensión (n≈4.8M); MTM Link (gestor estatal de NEMT de RI); Unite Rhode Island (red de referencias de ciclo cerrado).",
     heroTitle: [{ t: "Detecta" }, { t: "la" }, { t: "interrupción" }, { br: 1 }, { t: "antes", a: 1 }, { t: "de que" }, { t: "ocurra." }],
     heroAria: "Detecta la interrupción antes de que ocurra.",
     heroLede: "BP Cascade RI convierte una señal de riesgo de medicación para la hipertensión en una acción asistencial ajustada a la capacidad, y mantiene el ciclo abierto hasta observar una recarga objetiva.",
@@ -359,6 +409,11 @@ export const MKT = {
     escEyebrow: "Escada de escalonamento só para profissionais", escH2: "Quando um aviso não chega, escala o ciclo, não o paciente.",
     escSub: "Cada paciente por resolver percorre uma escada de três rondas, dirigida só a profissionais, sincronizada com uma fonte real de dados de farmácia e regulada pelo consentimento em cada passo.",
     footerEscalation: "Escalonamento",
+    navBusiness: "Quem paga",
+    bizEyebrow: "Modelo de negócio", bizH2: "Quem paga e porque funciona.",
+    bizSub: "O sistema clínico é apenas metade do produto. Aqui estão o cliente, o mecanismo financeiro, a economia que defenderemos e o fosso.",
+    bizNonGoal: "Um limite deliberado: o BP Cascade não compra transporte nem paga incentivos aos pacientes. Pagar o transporte de um beneficiário do Medicaid cria exposição a leis federais anti-suborno e de indução de beneficiários. Rhode Island já financia o NEMT através do seu operador estatal; o nosso papel é garantir que o benefício existente é mesmo utilizado.",
+    bizSources: "Fontes: Conjunto de Medidas Alinhadas da OHIC (Controlo da Hipertensão); atribuição de Entidades Responsáveis do RI EOHHS; literatura da AHA sobre o custo da não adesão na hipertensão (n≈4,8M); MTM Link (operador estatal de NEMT de RI); Unite Rhode Island (rede de encaminhamento de ciclo fechado).",
     heroTitle: [{ t: "Veja" }, { t: "a" }, { t: "interrupção" }, { br: 1 }, { t: "antes", a: 1 }, { t: "que" }, { t: "aconteça." }],
     heroAria: "Veja a interrupção antes que aconteça.",
     heroLede: "O BP Cascade RI transforma um sinal de risco de medicação para hipertensão numa ação de cuidado ajustada à capacidade, e mantém o ciclo aberto até observar uma recarga objetiva.",
@@ -399,6 +454,11 @@ export const MKT = {
     escEyebrow: "Nechèl eskalad pou pwofesyonèl sèlman", escH2: "Lè yon sèl rapèl pa ase, se bouk la ki eskalade, se pa pasyan an.",
     escSub: "Chak pasyan ki poko rezoud pase yon nechèl twa faz, ki voye bay pwofesyonèl sèlman, ki sinkronize ak yon vrè sous done famasi, epi ki kontwole pa konsantman nan chak etap.",
     footerEscalation: "Eskalad",
+    navBusiness: "Kiyès ki peye",
+    bizEyebrow: "Modèl biznis", bizH2: "Kiyès ki peye, epi poukisa li mache.",
+    bizSub: "Sistèm klinik la se sèlman mwatye pwodwi a. Men kliyan an, mekanis lajan an, ekonomi n ap defann nan, ak barye a.",
+    bizNonGoal: "Yon limit espre: BP Cascade pa achte transpò ni peye ankourajman pou pasyan. Peye transpò yon benefisyè Medicaid ekspoze ak lwa federal kont pòdvwa ak pouse benefisyè. Rhode Island deja finanse NEMT atravè kourtye eta a; wòl nou se asire benefis ki egziste deja a itilize toutbon.",
+    bizSources: "Sous: Ansanm Mezi Aliyen OHIC (Kontwòl Tansyon Wo); atribisyon Antite Responsab RI EOHHS; literati AHA sou kou pa-aderans nan ipètansyon (n≈4.8M); MTM Link (kourtye NEMT eta RI); Unite Rhode Island (rezo referans sik fèmen).",
     heroTitle: [{ t: "Wè" }, { t: "entèripsyon" }, { t: "an" }, { br: 1 }, { t: "anvan", a: 1 }, { t: "li" }, { t: "rive." }],
     heroAria: "Wè entèripsyon an anvan li rive.",
     heroLede: "BP Cascade RI transfòme yon siyal risk medikaman pou tansyon wo an yon aksyon swen ki respekte kapasite, epi li kenbe bouk la ouvè jiskaske yo obsève yon rechaj objektif.",
@@ -448,11 +508,15 @@ export const SITE_L = {
       { value: "942", label: "rutas limitadas por capacidad", note: "instantánea de rutas comprometida" },
       { value: "4", label: "estados del flujo", note: "enviar, reconocer, actuar, observar" },
       { value: "4", label: "idiomas admitidos", note: "inglés, español, portugués, criollo haitiano" },
+      { value: "0.857", label: "ROC-AUC fuera de muestra", note: "HistGradientBoosting · 33 variables sin fuga · CV estratificada de 5 pliegues" },
+      { value: "$1,176", label: "diferencia de costo anual por paciente", note: "adherente vs no adherente, cohorte AHA n=4.8M" },
     ],
     trustPoints: [
-      { eyebrow: "Rastro de decisión", title: "Ruta inspeccionable por humanos", body: "Reglas versionadas traducen el principal factor modificable en una acción responsable. Las excepciones de seguridad omiten el orden automático y requieren revisión humana.", code: "routing_table.yaml · v2" },
+      { eyebrow: "Rastro de decisión", title: "Ruta inspeccionable por humanos", body: "Reglas versionadas traducen el principal factor modificable en una acción responsable. Las excepciones de seguridad omiten el orden automático y requieren revisión humana.", code: "routing_table.yaml · v3" },
       { eyebrow: "Integridad del resultado", title: "El ciclo se cierra con evidencia", body: "Una tarea marcada como completa no se trata como resultado clínico. El cierre requiere una señal de recarga objetiva en la ventana prevista.", code: "State 4 · observed refill" },
       { eyebrow: "Disciplina del modelo", title: "Las pruebas de fuga son ejecutables", body: "Las variables previas al índice y los resultados de la ventana futura se separan mediante pruebas, con los campos demográficos fuera de las variables del modelo.", code: "tests/test_leakage.py" },
+      { eyebrow: "Fundamento legal", title: "El consentimiento tiene alcance, no se asume", body: "La CHCCIA de Rhode Island es más estricta que HIPAA: compartir con una entidad no cubierta requiere la autorización firmada del propio paciente, que una Entidad Responsable no puede dar en su nombre. La coordinación interna del cuidado y la divulgación externa son alcances separados, regulados por acción, que fallan cerrados cuando falta la autorización o está vencida.", code: "R.I. Gen. Laws § 5-37.3-4" },
+      { eyebrow: "Realidad de los datos", title: "Diseñado para datos con retraso, no para fantasías", body: "El historial de medicación de Surescripts lo inicia el prescriptor y está ligado a un encuentro, y los flujos de reclamaciones se retrasan de 30 a 90 días. Los tiempos de escalamiento se ajustan a la latencia de cada fuente, así que nunca se escala a un paciente por una recarga que aún no ha aparecido.", code: "access_mode · prescriber_initiated" },
     ],
     workflow: {
       before: [
@@ -484,6 +548,12 @@ export const SITE_L = {
       ["02", "Supervisión humana", "Las excepciones de seguridad nunca se descartan por capacidad y quedan marcadas para revisión obligatoria antes del contacto."],
       ["03", "Cierre objetivo", "El ciclo de retroalimentación se cierra solo con una recarga observada, no porque alguien marcó una tarea como hecha."],
     ],
+    business: [
+      { eyebrow: "Cliente", title: "Entidades Responsables de Medicaid de Rhode Island", body: "Los compradores son las Entidades Responsables de Medicaid de RI y las organizaciones de atención administrada que las contratan —entre ellas Providence Community Health Centers, Blackstone Valley Community Health Care y Thundermist—, que cubren unas 208,800 vidas Medicaid atribuidas en todo el estado.", code: "~208,800 vidas atribuidas" },
+      { eyebrow: "Alineación financiera", title: "Proteger el fondo de ahorros compartidos", body: "El control de la hipertensión es una medida central obligatoria del conjunto de medidas alineadas de OHIC. La puntuación de calidad global de una Entidad Responsable multiplica su fondo de ahorros compartidos, así que prevenir una interrupción de la medicación protege ese fondo directamente.", code: "conjunto de medidas OHIC" },
+      { eyebrow: "Economía defendible", title: "Una cifra que sí podemos defender", body: "Una diferencia de costo anual de $1,176 entre pacientes hipertensos adherentes y no adherentes, por una mejora realista de 5% absoluto en adherencia, equivale a unos $59 de ahorro bruto por paciente objetivo al año. NO afirmamos que cerrar una interrupción evite un derrame de $20,000: la incidencia basal de ACV en esta población es solo del 1.25–2%. Rechazar la cifra inflada es el punto.", code: "$1,176 × 5% ≈ $59 / paciente / año" },
+      { eyebrow: "Foso local", title: "Integración profunda en un solo estado", body: "MTM Link para NEMT, Unite Rhode Island para referencias comunitarias de ciclo cerrado, las restricciones específicas de facturación de CHW de Rhode Island y cuatro idiomas acordes a la demografía real del estado: una profundidad que un proveedor nacional no replicará. Rhode Island es la cabeza de playa, no el techo.", code: "MTM Link · Unite Rhode Island" },
+    ],
   },
   pt: {
     evidence: [
@@ -491,11 +561,15 @@ export const SITE_L = {
       { value: "942", label: "rotas limitadas por capacidade", note: "instantâneo de encaminhamento atual" },
       { value: "4", label: "estados do fluxo", note: "encaminhar, reconhecer, agir, observar" },
       { value: "4", label: "idiomas suportados", note: "inglês, espanhol, português, crioulo haitiano" },
+      { value: "0.857", label: "ROC-AUC fora da amostra", note: "HistGradientBoosting · 33 variáveis sem fuga · CV estratificada de 5 folds" },
+      { value: "$1,176", label: "diferença de custo anual por paciente", note: "aderente vs não aderente, coorte AHA n=4.8M" },
     ],
     trustPoints: [
-      { eyebrow: "Rasto de decisão", title: "Encaminhamento inspecionável por humanos", body: "Regras versionadas traduzem o principal fator modificável numa ação responsável. As exceções de segurança ignoram a ordenação automática e exigem revisão humana.", code: "routing_table.yaml · v2" },
+      { eyebrow: "Rasto de decisão", title: "Encaminhamento inspecionável por humanos", body: "Regras versionadas traduzem o principal fator modificável numa ação responsável. As exceções de segurança ignoram a ordenação automática e exigem revisão humana.", code: "routing_table.yaml · v3" },
       { eyebrow: "Integridade do resultado", title: "O ciclo fecha com evidência", body: "Uma tarefa marcada como concluída não é tratada como resultado clínico. O fecho exige um sinal de recarga objetivo na janela prevista.", code: "State 4 · observed refill" },
       { eyebrow: "Disciplina do modelo", title: "As verificações de fuga são executáveis", body: "As variáveis pré-índice e os resultados da janela futura são separados por testes, com os campos demográficos fora das variáveis do modelo.", code: "tests/test_leakage.py" },
+      { eyebrow: "Fundamento legal", title: "O consentimento é delimitado, não presumido", body: "A CHCCIA de Rhode Island é mais rigorosa que a HIPAA: partilhar com uma entidade não coberta exige a autorização assinada do próprio paciente, que uma Entidade Responsável não pode dar em seu nome. A coordenação interna dos cuidados e a divulgação externa são âmbitos separados, regulados por ação, que falham fechados quando a autorização falta ou está expirada.", code: "R.I. Gen. Laws § 5-37.3-4" },
+      { eyebrow: "Realidade dos dados", title: "Construído para dados com atraso, não para fantasia", body: "O histórico de medicação da Surescripts é iniciado pelo prescritor e ligado a um encontro, e os fluxos de sinistros atrasam 30 a 90 dias. Os tempos de escalonamento ajustam-se à latência de cada fonte, por isso um paciente nunca é escalado por uma recarga que ainda não surgiu.", code: "access_mode · prescriber_initiated" },
     ],
     workflow: {
       before: [
@@ -527,6 +601,12 @@ export const SITE_L = {
       ["02", "Supervisão humana", "As exceções de segurança nunca são descartadas por capacidade e ficam marcadas para revisão obrigatória antes do contacto."],
       ["03", "Fecho objetivo", "O ciclo de retorno fecha apenas com uma recarga observada, não porque alguém marcou uma tarefa como concluída."],
     ],
+    business: [
+      { eyebrow: "Cliente", title: "Entidades Responsáveis do Medicaid de Rhode Island", body: "Os compradores são as Entidades Responsáveis do Medicaid de RI e as organizações de cuidados geridos que as contratam — entre elas Providence Community Health Centers, Blackstone Valley Community Health Care e Thundermist —, cobrindo cerca de 208.800 vidas Medicaid atribuídas em todo o estado.", code: "~208.800 vidas atribuídas" },
+      { eyebrow: "Alinhamento financeiro", title: "Proteger o fundo de poupanças partilhadas", body: "O controlo da hipertensão é uma medida central obrigatória do conjunto de medidas alinhadas da OHIC. A pontuação de qualidade global de uma Entidade Responsável multiplica o seu fundo de poupanças partilhadas, por isso prevenir uma interrupção da medicação protege esse fundo diretamente.", code: "conjunto de medidas OHIC" },
+      { eyebrow: "Economia defensável", title: "Um número que conseguimos mesmo defender", body: "Uma diferença de custo anual de $1,176 entre pacientes hipertensos aderentes e não aderentes, vezes uma melhoria realista de 5% absoluto na adesão, dá cerca de $59 de poupança bruta por paciente-alvo por ano. NÃO afirmamos que fechar uma interrupção evita um AVC de $20,000 — a incidência basal de AVC nesta população é apenas 1,25–2%. Recusar o número inflacionado é o ponto.", code: "$1,176 × 5% ≈ $59 / paciente / ano" },
+      { eyebrow: "Fosso local", title: "Integração profunda num único estado", body: "MTM Link para NEMT, Unite Rhode Island para encaminhamentos comunitários de ciclo fechado, as restrições específicas de faturação de ACS de Rhode Island e quatro idiomas alinhados com a demografia real do estado — uma profundidade que um fornecedor nacional não replicará. Rhode Island é a cabeça de ponte, não o teto.", code: "MTM Link · Unite Rhode Island" },
+    ],
   },
   ht: {
     evidence: [
@@ -534,11 +614,15 @@ export const SITE_L = {
       { value: "942", label: "wout ki limite pa kapasite", note: "foto acheminman aktyèl la" },
       { value: "4", label: "eta workflow", note: "voye, rekonèt, aji, obsève" },
       { value: "4", label: "lang ki sipòte", note: "angle, panyòl, pòtigè, kreyòl ayisyen" },
+      { value: "0.857", label: "ROC-AUC andeyò echantiyon", note: "HistGradientBoosting · 33 karakteristik san fwit · CV stratifye 5 pli" },
+      { value: "$1,176", label: "diferans kou chak ane pa pasyan", note: "aderan vs pa aderan, kòwòt AHA n=4.8M" },
     ],
     trustPoints: [
-      { eyebrow: "Tras desizyon", title: "Acheminman yon moun ka egzamine", body: "Règ ki gen vèsyon tradui pi gwo faktè ou ka chanje a an yon sèl aksyon responsab. Depasman sekirite pase otou klasman otomatik la epi mande revizyon imen.", code: "routing_table.yaml · v2" },
+      { eyebrow: "Tras desizyon", title: "Acheminman yon moun ka egzamine", body: "Règ ki gen vèsyon tradui pi gwo faktè ou ka chanje a an yon sèl aksyon responsab. Depasman sekirite pase otou klasman otomatik la epi mande revizyon imen.", code: "routing_table.yaml · v3" },
       { eyebrow: "Entegrite rezilta", title: "Bouk la fèmen sou prèv", body: "Yon tach ki make fini pa konte kòm yon rezilta klinik. Fèmti mande yon siyal rechaj objektif nan fenèt yo prevwa a.", code: "State 4 · observed refill" },
       { eyebrow: "Disiplin modèl", title: "Tchèk fwit yo ka egzekite", body: "Karakteristik anvan endèks ak rezilta fenèt annapre yo separe pa tès, ak jaden demografik yo mete deyò nan karakteristik modèl la.", code: "tests/test_leakage.py" },
+      { eyebrow: "Baz legal", title: "Konsantman gen limit, li pa sipoze", body: "CHCCIA Rhode Island pi strik pase HIPAA: pataje ak yon antite ki pa kouvri mande otorizasyon pasyan an siyen li menm, yon Antite Responsab pa ka bay li nan non li. Kowòdinasyon swen entèn ak divilgasyon ekstèn se de limit separe, kontwole pa aksyon, ki fèmen lè otorizasyon an manke oswa ekspire.", code: "R.I. Gen. Laws § 5-37.3-4" },
+      { eyebrow: "Reyalite done", title: "Bati pou done ki an reta, se pa fantezi", body: "Istwa medikaman Surescripts se preskriptè ki kòmanse l epi li mare ak yon rankont, epi flux reklamasyon yo an reta 30 a 90 jou. Tan eskalad yo ajiste ak reta chak sous, konsa yo pa janm eskalade yon pasyan pou yon rechaj ki poko parèt.", code: "access_mode · prescriber_initiated" },
     ],
     workflow: {
       before: [
@@ -569,6 +653,12 @@ export const SITE_L = {
       ["01", "Onètete kapasite", "Limit wòl yo kontwole lis la pou pwodwi a pa janm kreye yon pil entèvansyon ou pa ka jere."],
       ["02", "Sipèvizyon imen", "Depasman sekirite pa janm elimine pou rezon kapasite epi yo rete make pou revizyon obligatwa anvan kontak."],
       ["03", "Fèmti objektif", "Bouk fidbak la fèmen sèlman sou yon rechaj yo obsève, se pa paske yon travayè make yon tach fini."],
+    ],
+    business: [
+      { eyebrow: "Kliyan", title: "Antite Responsab Medicaid Rhode Island", body: "Achtè yo se Antite Responsab Medicaid RI ak òganizasyon swen jere ki gen kontra ak yo — pami yo Providence Community Health Centers, Blackstone Valley Community Health Care, ak Thundermist — ki kouvri anviwon 208,800 vi Medicaid ki atribiye nan tout eta a.", code: "~208,800 vi atribiye" },
+      { eyebrow: "Aliyman finansye", title: "Pwoteje fon epay pataje a", body: "Kontwole tansyon wo se yon mezi santral obligatwa nan ansanm mezi aliyen OHIC la. Nòt kalite jeneral yon Antite Responsab miltipliye fon epay pataje li, konsa anpeche yon koupe medikaman pwoteje fon sa a dirèkteman.", code: "ansanm mezi OHIC" },
+      { eyebrow: "Ekonomi ki defandab", title: "Yon chif nou ka defann toutbon", body: "Yon diferans kou chak ane $1,176 ant pasyan ipètansyon ki aderan ak sa ki pa aderan, fwa yon amelyorasyon reyalis 5% absoli nan aderans, se anviwon $59 ekonomi brit pou chak pasyan sible pa ane. Nou PA di fèmen yon koupe anpeche yon konjesyon serebral $20,000 — ensidans konjesyon serebral debaz nan popilasyon sa a se sèlman 1.25–2%. Refize chif gonfle a se pwen an.", code: "$1,176 × 5% ≈ $59 / pasyan / ane" },
+      { eyebrow: "Barye lokal", title: "Entegrasyon pwofon nan yon sèl eta", body: "MTM Link pou NEMT, Unite Rhode Island pou referans kominotè sik fèmen, kontrent faktirasyon CHW espesifik Rhode Island, ak kat lang ki matche ak demografi reyèl eta a — yon pwofondè yon vandè nasyonal p ap kopye. Rhode Island se tèt plaj la, se pa plafon an.", code: "MTM Link · Unite Rhode Island" },
     ],
   },
 };
@@ -609,6 +699,8 @@ export const ESC_L = {
     outcomes: { pending: "Pending", no_refill: "No refill", refill_observed: "Refill observed", gated: "Gated", gated_internal: "Gated (internal)" },
     mediators: { pharmacy: "pharmacy", transit_broker: "transit broker", internal_transportation: "internal transport" },
     noEscalation: "No escalation state for this record.",
+    future: "Not yet reached", closedVia: "Refill confirmed via", latencyDaysWord: "day lag",
+    consentBadgeInt: "Int", consentBadgeExt: "Ext", consentBadgeLabel: "Consent",
     filterLabel: "Escalation",
     filterOptions: [
       ["all", "All stages"], ["r0", "Round 0"], ["r1", "Round 1"], ["r2", "Round 2"],
@@ -645,6 +737,8 @@ export const ESC_L = {
     outcomes: { pending: "Pendiente", no_refill: "Sin recarga", refill_observed: "Recarga observada", gated: "Bloqueado", gated_internal: "Bloqueado (interno)" },
     mediators: { pharmacy: "farmacia", transit_broker: "gestor de transporte", internal_transportation: "transporte interno" },
     noEscalation: "Sin estado de escalamiento para este registro.",
+    future: "Aún no alcanzada", closedVia: "Recarga confirmada vía", latencyDaysWord: "d de latencia",
+    consentBadgeInt: "Int", consentBadgeExt: "Ext", consentBadgeLabel: "Consentimiento",
     filterLabel: "Escalamiento",
     filterOptions: [
       ["all", "Todas las etapas"], ["r0", "Ronda 0"], ["r1", "Ronda 1"], ["r2", "Ronda 2"],
@@ -681,6 +775,8 @@ export const ESC_L = {
     outcomes: { pending: "Pendente", no_refill: "Sem recarga", refill_observed: "Recarga observada", gated: "Bloqueado", gated_internal: "Bloqueado (interno)" },
     mediators: { pharmacy: "farmácia", transit_broker: "gestor de transporte", internal_transportation: "transporte interno" },
     noEscalation: "Sem estado de escalonamento para este registo.",
+    future: "Ainda não alcançada", closedVia: "Recarga confirmada via", latencyDaysWord: "d de latência",
+    consentBadgeInt: "Int", consentBadgeExt: "Ext", consentBadgeLabel: "Consentimento",
     filterLabel: "Escalonamento",
     filterOptions: [
       ["all", "Todas as fases"], ["r0", "Ronda 0"], ["r1", "Ronda 1"], ["r2", "Ronda 2"],
@@ -717,6 +813,8 @@ export const ESC_L = {
     outcomes: { pending: "Annatant", no_refill: "San rechaj", refill_observed: "Rechaj obsève", gated: "Bloke", gated_internal: "Bloke (entèn)" },
     mediators: { pharmacy: "famasi", transit_broker: "koutye transpò", internal_transportation: "transpò entèn" },
     noEscalation: "Pa gen eta eskalad pou dosye sa a.",
+    future: "Poko rive", closedVia: "Rechaj konfime atravè", latencyDaysWord: "j reta",
+    consentBadgeInt: "Ent", consentBadgeExt: "Ekst", consentBadgeLabel: "Konsantman",
     filterLabel: "Eskalad",
     filterOptions: [
       ["all", "Tout etap"], ["r0", "Faz 0"], ["r1", "Faz 1"], ["r2", "Faz 2"],

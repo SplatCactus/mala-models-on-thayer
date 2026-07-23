@@ -281,7 +281,7 @@ function setLanguage(lang) {
   renderLangSwitch();
   applyMarketing();
   applyConsoleLabels();
-  renderEvidence(); renderRail(); renderWorkflow(state.workflowMode); renderTrust(); renderMethod();
+  renderEvidence(); renderRail(); renderWorkflow(state.workflowMode); renderTrust(); renderBusiness(); renderMethod();
   renderProductTabs(); renderTabCopy();
   if (state.data) { renderHero(); renderConsoleStats(); renderWorklist(); renderEscalation(); renderShowcase(state.activeTab, { animate: false }); renderSources(); }
   renderCopilot();
@@ -351,6 +351,22 @@ function renderMethod() {
   dom.methodGrid.innerHTML = SL().method.map(([n, title, body]) => `
     <div class="method-item"><span class="method-num">${escapeHtml(n)}</span>
       <h3>${escapeHtml(title)}</h3><p>${escapeHtml(body)}</p></div>`).join("");
+}
+
+// "Who pays, and why it works" — business-model cards (customer, financial
+// alignment, defensible economics, local moat). Data-driven from SITE_L[lang].business,
+// rendered with the existing trust-card pattern; headings/sources/non-goal are
+// data-i18n strings applied by applyMarketing().
+function renderBusiness() {
+  if (!dom.businessGrid) return;
+  dom.businessGrid.innerHTML = (SL().business || []).map((it) => `
+    <article class="trust-card" data-reveal>
+      <span class="t-eyebrow">${escapeHtml(it.eyebrow)}</span>
+      <h3>${escapeHtml(it.title)}</h3>
+      <p>${escapeHtml(it.body)}</p>
+      ${it.code ? `<span class="code-chip">${escapeHtml(it.code)}</span>` : ""}
+    </article>`).join("");
+  dom.businessGrid.querySelectorAll("[data-reveal]").forEach((el) => el.classList.add("is-visible"));
 }
 
 /* ---------------------------- escalation UI ---------------------------- */
@@ -448,6 +464,25 @@ function escPill(r) {
   return `<span class="esc-pill" data-esc="${escapeHtml(e.status)}" title="${escapeHtml(title)}">R${Number(e.current_round) || 0} · ${escapeHtml(escStatusLabel(e.status))}</span>`;
 }
 
+// Compact row consent badge: internal and external scopes shown separately, with
+// granted / denied / unknown / stale visually distinct (stale must not read as
+// granted). It is a button so clicking it expands the row's escalation timeline.
+function consentBadge(r) {
+  const e = r.escalation; const t = E();
+  const cs = e && e.consent_scopes; if (!cs) return "";
+  const chip = (key, abbr) => {
+    const sc = cs[key]; if (!sc) return "";
+    const st = sc.stale ? "stale" : (sc.state || "unknown");
+    const full = (t.consent && t.consent[key]) || key;
+    const stateL = sc.stale ? (t.consent && t.consent.stale) : ((t.consent && t.consent[sc.state]) || sc.state);
+    const label = `${full}: ${stateL}`;
+    return `<span class="consent-chip" data-state="${escapeHtml(st)}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">${escapeHtml(abbr)}</span>`;
+  };
+  const chips = chip("internal_care_coordination", t.consentBadgeInt) + chip("external_disclosure", t.consentBadgeExt);
+  if (!chips) return "";
+  return `<button type="button" class="consent-badge" data-expand="${escapeHtml(r.patient_id)}" aria-label="${escapeHtml(t.consentBadgeLabel)}">${chips}</button>`;
+}
+
 function escDateFmt(iso) {
   if (!iso) return "";
   try { return new Date(`${iso}T00:00:00`).toLocaleDateString(LOCALES[state.lang] || "en-US", { month: "short", day: "numeric", year: "numeric" }); }
@@ -496,13 +531,54 @@ function escalationDetail(r) {
   }).join("");
   const gatedBlock = gated ? `<div class="esc-block wide"><h4>${escapeHtml(t.gateTitle)}</h4>${gated}</div>` : "";
 
-  const hist = (e.dispatch_history || []).map((h) => {
-    const hr = escRoundInfo(h.round);
-    const hrecip = h.recipient_label?.[lang] || h.recipient_label?.en || h.recipient_type || "";
-    const out = t.outcomes[h.outcome] || h.outcome || "";
-    return `<div class="esc-hist-row"><span class="esc-hist-round">${escapeHtml(hr.name)}</span><span class="esc-hist-recip">${escapeHtml(hrecip)}</span><span class="esc-hist-outcome">${escapeHtml(out)}</span></div>`;
+  // Vertical ladder timeline: all three rounds, so the full shape is always
+  // legible. Reached rounds show recipient (+ mediated_by), dispatch date, the
+  // message body in the current language, and the outcome; unreached rounds are
+  // dimmed future steps. The round that closed the loop is marked.
+  const rounds = t.roundLabels || ESC_L.en.roundLabels;
+  const histByRound = {};
+  (e.dispatch_history || []).forEach((h) => { histByRound[Number(h.round)] = h; });
+  const timeline = rounds.map((rl, i) => {
+    const h = histByRound[i];
+    const reached = Boolean(h);
+    const isClosed = e.status === "CLOSED" && Number(e.closed_on_round) === i;
+    const cls = ["esc-tl-step"];
+    if (!reached) cls.push("is-future");
+    if (isClosed) cls.push("is-closed");
+    const last = i === rounds.length - 1;
+    let inner;
+    if (reached) {
+      const hrecip = h.recipient_label?.[lang] || h.recipient_label?.en || h.recipient_type || "";
+      const med = h.mediated_by ? ` <span class="mono">${escapeHtml(t.via)} ${escapeHtml((t.mediators && t.mediators[h.mediated_by]) || h.mediated_by)}</span>` : "";
+      const date = h.dispatched_at ? escDateFmt(h.dispatched_at) : "";
+      const hbody = h.body?.[lang] || h.body?.en || "";
+      const out = t.outcomes[h.outcome] || h.outcome || "";
+      inner = `<div class="esc-tl-top"><span class="esc-tl-recip"><b>${escapeHtml(t.dispatchTo)}:</b> ${escapeHtml(hrecip)}${med}</span>${date ? `<span class="esc-tl-date mono">${escapeHtml(date)}</span>` : ""}</div>
+        ${hbody ? `<p class="esc-tl-msg">${escapeHtml(hbody)}</p>` : ""}
+        <span class="esc-tl-outcome" data-outcome="${escapeHtml(h.outcome || "")}">${escapeHtml(out)}${isClosed ? ` · ${escapeHtml(t.closedHere)}` : ""}</span>`;
+    } else {
+      inner = `<span class="esc-tl-future">${escapeHtml(t.future)}</span>`;
+    }
+    return `<div class="${cls.join(" ")}">
+      <div class="esc-tl-rail"><span class="esc-tl-dot">${i}</span>${last ? "" : `<span class="esc-tl-line"></span>`}</div>
+      <div class="esc-tl-content">
+        <div class="esc-tl-name">${escapeHtml(rl.name)}<span>${escapeHtml(rl.desc)}</span></div>
+        ${inner}
+      </div>
+    </div>`;
   }).join("");
-  const histBlock = hist ? `<div class="esc-block wide"><h4>${escapeHtml(t.historyTitle)}</h4>${hist}</div>` : "";
+  const timelineBlock = `<div class="esc-block wide"><h4>${escapeHtml(t.historyTitle)}</h4><div class="esc-timeline">${timeline}</div></div>`;
+
+  // CLOSED terminal: an objective refill closed the loop. Surface the source and
+  // its latency in days -- the honesty about lagged data is the point.
+  const oo = e.objective_outcome;
+  let terminalBlock = "";
+  if (e.status === "CLOSED" && oo && (oo.refill_source || oo.refill_latency_days != null)) {
+    const latency = oo.refill_latency_days != null ? `${fmt(oo.refill_latency_days)} ${t.latencyDaysWord}` : "";
+    terminalBlock = `<div class="esc-block wide esc-terminal-closed"><h4>${escapeHtml(t.terminalClosed)}</h4>
+      <div class="esc-closed-line"><span class="esc-closed-dot"></span><span>${escapeHtml(t.closedVia)} <b>${escapeHtml(oo.refill_source || "")}</b>${latency ? ` · <span class="mono">${escapeHtml(latency)}</span>` : ""}</span></div>
+    </div>`;
+  }
 
   return `<div class="esc-detail">
     <div class="esc-detail-head">
@@ -510,7 +586,7 @@ function escalationDetail(r) {
       ${breakDate ? `<span class="esc-detail-meta">${escapeHtml(t.predictedBreak)}: <b>${escapeHtml(breakDate)}</b></span>` : ""}
       ${countdown ? `<span class="esc-detail-meta mono">${escapeHtml(countdown)}</span>` : ""}
     </div>
-    <div class="esc-blocks">${dispatchBlock}${consentBlock}${gatedBlock}${histBlock}</div>
+    <div class="esc-blocks">${dispatchBlock}${consentBlock}${gatedBlock}${terminalBlock}${timelineBlock}</div>
   </div>`;
 }
 
@@ -745,7 +821,7 @@ function renderWorklist() {
     const outcomeClass = onTime ? "observed" : confirmedBreak ? "confirmed-break" : "";
     return `<div class="wl-group${open ? " is-open" : ""}" data-id="${escapeHtml(id)}">
       <div class="wl-cols wl-row">
-        <div class="wl-patient" data-col="patient"><strong>${escapeHtml(r.display_name)}</strong><span class="pid">${escapeHtml(String(r.patient_id).slice(0, 14))}</span>${r.is_safety_override ? `<span class="safety-pill">${escapeHtml(s.humanReview)}</span>` : ""}${escPill(r)}</div>
+        <div class="wl-patient" data-col="patient"><strong>${escapeHtml(r.display_name)}</strong><span class="pid">${escapeHtml(String(r.patient_id).slice(0, 14))}</span>${r.is_safety_override ? `<span class="safety-pill">${escapeHtml(s.humanReview)}</span>` : ""}${escPill(r)}${consentBadge(r)}</div>
         <div data-col="urgency" data-col-label="${escapeHtml(s.urgency)}"><div class="metric-top"><strong>${urg}</strong><span>/100</span></div><div class="metric-track"><span class="metric-fill urgency" style="width:${urg}%;--pct:${urg}"></span></div></div>
         <div class="wl-window" data-col="window" data-col-label="${escapeHtml(s.window)}">${escapeHtml(formatRange(r.break_window_start, r.break_window_end))}</div>
         <div data-col="risk" data-col-label="${escapeHtml(s.riskShort)}"><div class="metric-top"><strong>${risk}%</strong></div><div class="metric-track"><span class="metric-fill risk" style="width:${risk}%;--pct:${Math.max(risk, 1)}"></span></div></div>
@@ -1033,7 +1109,7 @@ function cacheDom() {
     "hero-signal-list", "hero-queue-count", "hero-source", "hero-sync", "care-rail",
     "evidence-grid", "workflow-cards", "wf-before", "wf-after",
     "product-tabs", "tab-copy", "screen-body", "copilot-prompts", "copilot-answer", "copilot-note",
-    "trust-stack", "method-grid", "console-stats", "console-meta", "console-controls",
+    "trust-stack", "business-grid", "method-grid", "console-stats", "console-meta", "console-controls",
     "esc-cascade", "esc-source", "esc-guardrails", "esc-filter",
     "q", "route-filter", "risk-filter", "risk-value", "reset-filters",
     "worklist", "wl-head", "wl-body", "console-foot", "result-count", "load-more",
@@ -1055,7 +1131,7 @@ function boot() {
   renderLangSwitch();
   applyMarketing();
   applyConsoleLabels();
-  renderEvidence(); renderRail(); renderWorkflow("after"); renderTrust(); renderMethod();
+  renderEvidence(); renderRail(); renderWorkflow("after"); renderTrust(); renderBusiness(); renderMethod();
   renderProductTabs(); renderTabCopy(); renderCopilot();
   heroEntrance();
   initReveal();

@@ -58,7 +58,9 @@ source of truth for discrimination), and `python -m src.run_routing_pipeline`
 - **Leakage discipline:** demographics (race / ethnicity / gender / income / ZIP /
   geo / healthcare-cost) are held out of the model by an allowlist in
   `src/models/common.py`; `tests/test_leakage.py` + `tests/test_pre_index_leakage.py`
-  (**31 tests, all passing**) enforce the strictly-pre-index feature rule.
+  (**31 leakage tests**) enforce the strictly-pre-index feature rule; the full
+  suite is **98 tests, all passing** (leakage + escalation, consent, connectors,
+  dispatch, API contract, retraining, and an end-to-end integration).
 - Routing: 942-patient worklist capped by role capacity
   (CHW call / social worker / pharmacist), with EN/ES rationale per patient
 - **Synthetic-data ceiling:** Synthea models adherence as a stable per-patient
@@ -84,7 +86,25 @@ cd src/ui && python3 -m http.server 5500
 
 The dashboard fetches `http://localhost:8000/worklist`, which serves
 `data/snapshots/routing_table.json` translated into the UI's flat row
-format (see `src/api/main.py`).
+format (see `src/api/main.py`). With the API stopped it falls back to the
+bundled snapshot `src/ui/assets/worklist.sample.json`.
+
+### Regenerate the demo state / bundled snapshot
+
+```bash
+make demo-state   # regenerate data/snapshots/ feedback-loop artifacts
+                  #   (deletes stale escalation_state/loop_outcomes, writes synthetic
+                  #    consent.json, then runs the escalation job)
+make snapshot     # demo-state + capture GET /worklist into the bundled UI snapshot
+                  #   (src/ui/assets/worklist.sample.json)
+```
+
+Both anchor the escalation clock near today (21 days/tick × 5 = 84 days).
+**Do not run the escalation job with a far-future simulated date:** consent has a
+365-day validity window (`CONSENT_VALIDITY_DAYS`) measured against the *simulated*
+clock, so a far-future run marks every consent record stale and gates the whole
+cohort. `src/sync/escalation_job.py` emits a loud startup warning if the simulated
+timeline would exceed that window.
 
 ## Rebuilding from raw data
 

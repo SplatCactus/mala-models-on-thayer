@@ -101,6 +101,28 @@ What's in code now:
 The old **States 2/3** (Acknowledged/Actioned) remain the CHW's client-side subjective
 progress; the loop still CLOSES only on the objective refill, never on self-report.
 
+## Why n_round2 is 0 on synthetic data
+
+On the synthetic cohort the escalation funnel always reports **`n_round2 = 0`**, and
+this is **structural, not a tuning problem**. The `local_file` connector derives each
+patient's outcome from the fixed `has_30_day_gap` label committed in `labels.parquet`,
+so a patient resolves **permanently** to `CLOSED` (label = adherent) or `EXHAUSTED`
+(label = a confirmed break) at their **first** observation. There is never an open
+"no refill *yet*" interval for the ladder to climb through — the outcome is known up
+front, so no synthetic patient is ever left unresolved long enough to reach Round 2.
+
+Round 2 (escalate to the AE prescriber) is **fully implemented and unit-tested**
+(`src/routing/escalation.py`; `tests/test_escalation.py`,
+`tests/test_escalation_machine.py`, `tests/test_dispatch_messages.py::test_round2_*`
+exercise the transition, the latency-adjusted timer, and the full-history dispatch
+body). What it *requires* to fire is a **longitudinal feed with genuinely unresolved
+patients** — a patient who is open, gets Round 0/1 dispatches, and only later either
+refills or doesn't. **Real AE claims data provides exactly that** (a 30–90-day
+rolling window of fills that resolve over time), which is the demo's intended
+production timer backbone. We deliberately do **not** fabricate Round 2 patients to
+make the funnel look fuller; `n_round2 = 0` is the honest reading of a
+label-derived synthetic feed.
+
 ## State 4 → retraining
 
 Closed loops are fresh, real-world-observed labels: `on_time_refill` → `y=1`

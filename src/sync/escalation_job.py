@@ -65,6 +65,7 @@ from src.worklist_builder import build_worklist_payload  # noqa: E402
 from src.sync.pharmacy_source import PharmacyRefillSource, SyntheticRIAdapter  # noqa: E402
 from src.sync.loop_closure import write_loop_outcomes  # noqa: E402
 from src.routing.escalation import build_escalation_state  # noqa: E402
+from src.routing.consent import CONSENT_PATH, CONSENT_VALIDITY_DAYS, load_consent  # noqa: E402
 
 OUTPUT_PATH = ROOT / "data" / "snapshots" / "routing_table.json"
 ESC_DATA_SOURCE_LABEL = "synthetic (escalation demo)"
@@ -140,6 +141,40 @@ def run_escalation_loop(
     return len(revealed)
 
 
+def _warn_if_consent_will_read_stale(
+    base: date, sim_days_per_tick, max_ticks, *, consent_path: Path = CONSENT_PATH
+) -> None:
+    """Loudly warn if the simulated timeline will run past the consent validity window.
+
+    Consent staleness is measured against the SIMULATED clock (src/routing/consent.py's
+    CONSENT_VALIDITY_DAYS, {days}). If the last simulated tick lands more than that many
+    days after the freshest consent as_of date, every record reads stale, fails closed,
+    and gating over-triggers on the whole cohort -- a silent, misleading result. This is
+    the sharp edge the near-today anchor avoids; we refuse to proceed quietly past it.
+    """.format(days=CONSENT_VALIDITY_DAYS)
+    if not sim_days_per_tick:
+        return  # no compression -> runs at ~today, consent stays fresh
+    records = load_consent(consent_path)
+    as_ofs = [datetime.strptime(r.as_of[:10], "%Y-%m-%d").date()
+              for r in records.values() if r.as_of]
+    if not as_ofs:
+        return  # no dated consent to go stale against
+    freshest = max(as_ofs)
+    unbounded = max_ticks is None
+    end = None if unbounded else base + timedelta(days=sim_days_per_tick * max(max_ticks - 1, 0))
+    over = unbounded or (end - freshest).days > CONSENT_VALIDITY_DAYS
+    if over:
+        end_desc = "unbounded (runs forever)" if unbounded else end.isoformat()
+        log.warning(
+            "*** CONSENT WILL READ STALE ***  simulated end date %s is more than "
+            "%d days (CONSENT_VALIDITY_DAYS) after the freshest consent as_of %s. "
+            "Every consent record will be treated as absent -> gating will OVER-TRIGGER "
+            "and mark the whole cohort gated. Fix by lowering --simulate-days-per-tick "
+            "/ --max-ticks, anchoring --as-of near the consent dates, or re-running "
+            "`python -m src.routing.consent` to refresh the as_of dates first.",
+            end_desc, CONSENT_VALIDITY_DAYS, freshest.isoformat())
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--interval", type=float, default=5.0, help="seconds between ticks")
@@ -153,6 +188,8 @@ def main() -> int:
 
     source = SyntheticRIAdapter(PANEL_PATH, LABELS_PATH, batch_size=args.batch_size, seed=args.seed)
     base = date.fromisoformat(args.as_of) if args.as_of else date.today()
+    # Guard the sharp edge: a far-future simulated timeline reads all consent as stale.
+    _warn_if_consent_will_read_stale(base, args.simulate_days_per_tick, args.max_ticks)
     run_escalation_loop(
         source, interval_seconds=args.interval, sim_days_per_tick=args.simulate_days_per_tick,
         base_date=base, max_ticks=args.max_ticks,
