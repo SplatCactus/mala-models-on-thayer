@@ -80,6 +80,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from src.models.common import PANEL_PATH, LABELS_PATH  # noqa: E402
+from src.models.classifier import DEPLOYED_MODEL  # noqa: E402
 from src.explain.shap_runner import SHAPRunner, ALL_MODEL_FEATURES  # noqa: E402
 from src.routing.rules import RoutingRuleEngine  # noqa: E402
 from src.routing.capacity import CapacityEngine  # noqa: E402
@@ -178,6 +179,7 @@ def run(
     labels_path: Path = LABELS_PATH,
     role_caps: Optional[Dict[str, int]] = None,
     routing_table_path: Optional[Path] = None,
+    model_name: str = DEPLOYED_MODEL,
 ) -> tuple[dict, FairnessReport]:
     log.info("Loading feature panel + labels...")
     frame = load_panel_and_labels(panel_path, labels_path)
@@ -197,9 +199,12 @@ def run(
         int(y_risk.sum()), len(y_risk),
     )
 
-    log.info("Fitting SHAPRunner (linear risk model, at-risk-positive polarity)...")
-    runner = SHAPRunner()
+    log.info("Fitting SHAPRunner (model=%s, at-risk-positive polarity)...", model_name)
+    runner = SHAPRunner(model_name=model_name)
     runner.fit(frame, y_risk)
+    log.info("  model family=%s, fit on %d features (routing attributes the %d "
+             "modifiable-driver features; the rest inform risk as context)",
+             runner._family, len(runner.feature_columns), len(ALL_MODEL_FEATURES) - 1)
     profiles = runner.explain_cohort(frame)
     log.info("  explained %d patients", len(profiles))
 

@@ -18,16 +18,26 @@ treated-hypertensive cohort. Pipeline: `etl/cohort.py` → `features/build_featu
 - **venv:** `./venv/Scripts/python.exe` — `scikit-learn`, `scipy`, `joblib` were
   missing and have been installed. numpy/pandas/pyarrow/polars already present.
 
-## AUC facts (already established — don't re-litigate)
+## AUC facts (SUPERSEDED early-exploration numbers — 2026-07 handoff)
+> **Superseded (2026-07-23).** The figures in this section are the *early
+> exploration* numbers that motivated the GBDT swap, on an earlier/smaller
+> feature panel and before final hyperparameter tuning. The current, authoritative
+> out-of-fold results live in `data/snapshots/auc_report.json` (reproduce with
+> `python src/eval/run_auc.py`) and are summarized in `MODEL_CARD.md`:
+> **HGB ROC-AUC 0.857 / PR-AUC(gap) 0.596, logistic 0.681, shallow RF 0.834** on
+> the 33-feature panel. Kept below as history; do not quote these as current.
 - `classifier.py` reports **PR-AUC** (`average_precision_score`), positive class =
   adherent → prints **0.888/0.904**. That's ~0.855 baseline prevalence + ~0.04 skill.
   Misleading.
 - Saved RF **in-sample** ROC-AUC = **0.929** (overfit memorization; `max_depth=12`,
   not the docstring's "4").
-- **Honest out-of-fold ROC-AUC: logistic 0.584, RF 0.626, HGB ~0.648,
+- **Honest out-of-fold ROC-AUC (early panel): logistic 0.584, RF 0.626, HGB ~0.648,
   HGB+engineered feats 0.655.** Hispanic vs non-Hispanic gap small and not significant.
+  (Now superseded: the enriched 33-feature panel + tuning reach HGB 0.857 — see the
+  banner above.)
 - 0.9+ is only reachable via outcome leakage (verified: leaked feature → AUC 1.000).
-  Do not pursue it.
+  Do not pursue it. (The ~0.94 figure in `fairness_report.json` is **in-sample**
+  scoring of the fitted cohort, not leakage and not a generalization claim.)
 
 ## Task 1 — rework `classifier.py` to a gradient-boosted-tree architecture
 For tabular EHR data, gradient-boosted decision trees (GBDT) are the correct default —

@@ -123,7 +123,15 @@ class SyntheticRIAdapter(PharmacyRefillSource):
 
 
 class CurrentCareAdapter(PharmacyRefillSource):
-    """Real-integration stub: Rhode Island's CurrentCare HIE.
+    """DEPRECATED real-integration stub: Rhode Island's CurrentCare HIE.
+
+    DEPRECATED (2026-07-23): RIQI/CurrentCare was **sunset**; Rhode Island's RHIO
+    is now **CRISP Shared Services**. Do not build a CurrentCare adapter on this
+    stub, and do not build a CRISP adapter here either -- third-party HIE access
+    requires state designation plus a multi-party DUA. The dispense/refill signal
+    now lives in the connector layer (src/sync/connectors/); a future CRISP feed
+    would be a new ``PharmacyConnector`` there (see connectors/factory.py's CRISP
+    seam note), not a resurrection of this class.
 
     NOT IMPLEMENTED -- requires a signed data-use agreement (DUA) with
     CurrentCare before any of this can be built. This class exists so the

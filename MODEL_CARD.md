@@ -1,6 +1,75 @@
 # Model Card — BP Cascade RI Persistence-Risk Model
 
-Last updated: 2026-07-02 (pivoted to binary classification; current primary model is `shallow_random_forest`)
+Last updated: 2026-07-23. The **current, authoritative** model is a
+`HistGradientBoostingClassifier` on the 300K-derived cohort — see
+**"Current model (authoritative)"** immediately below. Sections dated
+2026-07-02 (the 1K/n=115 classification checkpoint and the survival baseline)
+are retained as **clearly-labeled superseded baselines**, not current results.
+
+## Current model (authoritative) — 300K-derived cohort, 2026-07-23
+
+Everything in this section is reproducible by running the code as it stands
+(`python src/eval/run_auc.py` → `data/snapshots/auc_report.json`).
+
+- **Model family + hyperparameters.** `HistGradientBoostingClassifier`
+  (`src/models/classifier.py::build_hist_gradient_boosting`, the `DEPLOYED_MODEL`):
+  `learning_rate=0.02, max_leaf_nodes=31, l2_regularization=10.0,
+  min_samples_leaf=20, max_iter=1000, early_stopping=True, n_iter_no_change=20,
+  validation_fraction=0.1, class_weight=None, random_state=0`. **No imputer/scaler**
+  — HGB bins features internally, is scale-invariant, and treats NaN as a
+  first-class split direction. Logistic regression (L2, `C=0.1`) is retained as an
+  interpretable baseline; the shallow random forest as a dominated baseline only.
+  The routing pipeline's SHAP explainer (`src/explain/shap_runner.py`) fits and
+  explains **this same primary model** (TreeSHAP), so `routing_table.json` is
+  produced by the strong model, not an ad-hoc linear one.
+- **Feature count + families: 33 features**, all strictly pre-index and
+  leakage-safe (admitted by `src/models/common.py::select_feature_columns`):
+  BP trajectory (`sbp_*` / `dbp_*`: mean/max/min/latest/slope), SDOH barrier flags
+  (`flag_*`), and pre-index behavioral features from `src/features/pre_index.py` —
+  comorbidity (`cmb_`), regimen (`rx_`), prior adherence (`adh_`), engagement
+  (`engage_`), payer churn (`payer_`), and cross-drug refill mechanics (`xdrug_`),
+  plus `age_years`. (Note: `pre_index.py` also defines `acute_*` and `lab_*`
+  families, but they are **not** in `FEATURE_PREFIXES` and **not** in the committed
+  panel, so they do not reach the model today — count is exactly 33.)
+- **Evaluation protocol.** Strictly **out-of-fold** 5-fold stratified CV
+  (`shuffle=True, random_state=0`): each fold predicts only its held-out rows, so
+  no patient is scored by a model that trained on them. Target `has_30_day_gap`
+  (event-positive: y=1 is the ≥30-day gap). Reported per model: ROC-AUC, PR-AUC for
+  the gap event vs. its no-skill baseline (prevalence), and ROC-AUC by ethnicity.
+- **Honest out-of-fold numbers** (`data/snapshots/auc_report.json`):
+
+  | model | ROC-AUC | PR-AUC (gap event) | note |
+  |---|---|---|---|
+  | no-skill baseline | — | 0.146 | gap-event prevalence |
+  | **HistGradientBoosting (primary/deployed)** | **0.857** | **0.596** | lift +0.450 |
+  | Logistic regression (baseline) | 0.681 | 0.264 | interpretable |
+  | Shallow random forest (dominated) | 0.834 | 0.507 | kept for comparison |
+
+  By-ethnicity out-of-fold ROC-AUC (primary): Hispanic **0.846** (n=2,232),
+  non-Hispanic **0.859** (n=13,973) — no material fairness gap in discrimination.
+- **In-sample vs. out-of-fold — do not confuse them.** The deployed pipeline
+  (`run_routing_pipeline.py`) fits on the full cohort and then scores that same
+  cohort, so `predicted_risk` in `routing_table.json` and the **overall AUC field
+  in `fairness_report.json` (~0.94) are IN-SAMPLE** — inflated by a tree model
+  memorizing its training rows. That number is **not** a performance claim; the
+  honest discrimination is the out-of-fold **0.857** above.
+- **Held-out demographic columns** (never model inputs; enforced in code by the
+  `select_feature_columns` allowlist + `HELD_ASIDE_DEMOGRAPHIC_COLUMNS`, verified
+  by regenerating the panel): `RACE, ETHNICITY, GENDER, CITY, STATE, ZIP, LAT, LON,
+  HEALTHCARE_EXPENSES, HEALTHCARE_COVERAGE, INCOME, is_deceased`. They remain in
+  `feature_panel.parquet` for fairness stratification but cannot reach the model
+  under any path.
+- **Fairness (selection into the capped worklist).** Min/max selection-rate ratio
+  **0.9933** — passes the 80% disparate-impact rule (`fairness_report.json`).
+- **Synthetic-data ceiling (read before quoting 0.857).** Synthea models
+  medication adherence as a **stable per-patient trait**, so a patient's pre-index
+  **cross-drug** refill behavior predicts their post-index **antihypertensive**
+  adherence more cleanly than it would on real EHR data. Treat 0.857 as a
+  synthetic-data ceiling, not a real-world estimate; real-world validation is the
+  explicit next step.
+- **Tests.** `tests/test_leakage.py` + `tests/test_pre_index_leakage.py` —
+  **31 tests, all passing** — enforce the strictly-pre-index feature rule across
+  every feature module.
 
 ## Pivot: binary classification (2026-07-02)
 
@@ -82,14 +151,22 @@ the appropriate CHW/pharmacist/social-worker intervention (see
   ever leaks into it. Demographic columns from `cohort.py`
   (RACE/ETHNICITY/GENDER/ZIP/etc.) are excluded from the model by design —
   held aside for subgroup fairness auditing, not fed to the tree.
-- **`tests/test_leakage.py`** — 10 tests proving the index-date leakage rule
-  holds: boundary cases (a reading/condition exactly *on* index_date, and
-  after) plus randomized property tests across 50 synthetic patients for
-  both `trajectories.py` and `sdoh.py`, plus the flip-side check on
-  `pdc.py` (a pre-index fill must not count toward the forward coverage
-  window). **All 10 passing.**
+- **`tests/test_leakage.py`** — proves the index-date leakage rule holds:
+  boundary cases (a reading/condition exactly *on* index_date, and after) plus
+  randomized property tests across 50 synthetic patients for both
+  `trajectories.py` and `sdoh.py`, the trauma strict-recurrence rule, and the
+  flip-side check on `pdc.py` (a pre-index fill must not count toward the forward
+  coverage window). Extended by **`tests/test_pre_index_leakage.py`** across the
+  `pre_index.py` feature family (comorbidity / regimen / prior-adherence /
+  engagement / payer / cross-drug). **The two files total 31 tests, all passing**
+  (2026-07-23; the older "10 passing" count predated `test_pre_index_leakage.py`).
 
-## Results — classification models (current)
+## Superseded baseline — 1K incident-user cohort (n=115, 2026-07-02)
+
+> **Superseded.** These are the pre-300K, pre-feature-enrichment classification
+> numbers on the tiny 1K-derived cohort. Kept for history; the authoritative
+> current results are in "Current model (authoritative)" above. Do not quote the
+> figures below as current.
 
 Cohort: **115 patients** (incident-user, post-leakage-fix), **51.3% positive**
 (`has_30_day_gap`, 59/115) — a near-balanced label, unlike the older
@@ -104,8 +181,10 @@ fresh model per fold, no shared fitted state across folds.
 
 Both models clear the no-skill baseline with some margin — the first result
 in this project that isn't statistically indistinguishable from chance.
-Shallow Random Forest is the better of the two on both metrics and is the
-current primary model (`models/shallow_random_forest.joblib`).
+Shallow Random Forest was the better of the two on both metrics and was the
+primary model *at this 2026-07-02 checkpoint* — since superseded by the
+HistGradientBoostingClassifier on the 300K cohort (see the authoritative section
+at the top of this card).
 
 **Caveats before reading too much into this:**
 - n=115 with 5-fold CV means each fold's validation set is ~23 patients —

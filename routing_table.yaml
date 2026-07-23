@@ -15,14 +15,21 @@
 # confirmed with product before this table is treated as final.
 # ---------------------------------------------------------------------------
 
-version: 2
+version: 3
 schema_version: "1.0"
-last_updated: "2026-07-22"
+last_updated: "2026-07-23"
 # v2 (2026-07-22): added Portuguese (rationale_pt) and Haitian Creole
 # (rationale_ht) outreach-script translations alongside the existing EN/ES,
 # same field-per-language pattern, same register/complexity as the ES
 # translations. No routing logic changed -- version bumped per this file's
 # own "any change should bump version" convention above.
+# v3 (2026-07-23): provider-only reframe. The trauma safety-override rationale
+# said review was required "before any automated outreach"/"contacto
+# automatizado", which reads as automated PATIENT contact. This system never
+# messages a patient -- every dispatch goes to a provider/organization -- so the
+# wording now says "automated provider dispatch". No routing logic changed;
+# version bumped per the convention above. See ESCALATION_PLAN.md and the
+# escalation ladder (src/routing/escalation.py) for the provider-only model.
 
 # Relative-margin tie-break threshold. The top SHAP driver must exceed the
 # second-ranked driver's |value| by this multiple to be used directly.
@@ -59,22 +66,26 @@ safety_overrides:
     rationale_en: >-
       Trauma exposure (IPV) detected as a contributing factor. Routed
       directly to social worker per clinical safety protocol; flagged for
-      mandatory human review before any automated outreach occurs.
+      mandatory human review before any automated provider dispatch occurs.
+      (The dispatch goes to a provider, never to the patient.)
     rationale_es: >-
       Se detectó exposición a trauma (violencia de pareja) como factor
       contribuyente. Se deriva directamente a trabajo social según el
       protocolo de seguridad clínica; se marca para revisión humana
-      obligatoria antes de cualquier contacto automatizado.
+      obligatoria antes de cualquier envío automatizado a un proveedor.
+      (El envío se dirige a un proveedor, nunca al paciente.)
     rationale_pt: >-
       Foi detetada exposição a trauma (violência doméstica) como fator
       contribuinte. Encaminhado diretamente para o assistente social,
       conforme o protocolo de segurança clínica; sinalizado para revisão
-      humana obrigatória antes de qualquer contacto automatizado.
+      humana obrigatória antes de qualquer encaminhamento automatizado a um
+      profissional. (O encaminhamento destina-se a um profissional, nunca ao paciente.)
     rationale_ht: >-
       Nou detekte yon ekspozisyon a chòk (vyolans nan koup) kòm yon faktè
       ki kontribye. Nou voye dosye a dirèkteman bay travayè sosyal la
       selon pwotokòl sekirite klinik la; nou make li pou revizyon imen
-      obligatwa anvan nenpòt kontak otomatik fèt.
+      obligatwa anvan nenpòt voye otomatik bay yon founisè fèt.
+      (Voye a ale bay yon founisè, pa janm bay pasyan an.)
 
 # Standard driver -> action map. Each entry defines the primary action,
 # an optional secondary_action (carried in the background data layer only,

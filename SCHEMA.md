@@ -98,3 +98,41 @@ not a real-RI finding.
 Cohort snapshot: data/snapshots/cohort_patients.parquet (gitignored,
 regenerate with `./venv/bin/python src/etl/cohort.py`)
 
+## Feedback-loop & escalation artifacts (data/snapshots/, gitignored)
+
+Produced by the routing → closure → escalation pipeline; consumed read-only by
+`src/api/main.py` (see `API_CONTRACT.md` for the served shapes).
+
+- **routing_table.json** — worklist (`meta`, `capped_worklist`, `eligible_pool`,
+  `eligible_pool_summary`). Unchanged by the escalation work; `fairness.py` consumes
+  `eligible_pool` vs `capped_worklist`. Produced by `run_routing_pipeline.py`.
+- **loop_outcomes.json** — objective per-patient outcomes from
+  `sync/loop_closure.py` via the connector layer. `outcomes[pid] = {observed,
+  on_time_refill, event_date, source, refill_source, refill_latency_days}`. The last
+  two are additive (2026-07-23); every prior key is unchanged.
+- **pharmacy_sync_state.json** — active dispense source + fallback trace, written by
+  `sync/connectors/factory.py`: `{selected:{source_name, access_mode
+  (prescriber_initiated|batch_permitted), min/typical/max_latency_days,
+  requires_encounter, confirms_dispense, latency_days:{min,typical,max}},
+  last_synced, attempts:[{adapter, outcome (served|auth_failed), reason}]}`.
+- **consent.json** — **SYNTHETIC** two-scope consent (`src/routing/consent.py`).
+  `patients[pid] = {internal, external (granted|denied|unknown), source, as_of}`;
+  a top-level `_note` and `meta.synthetic:true` flag it as not-real. `internal_care_
+  coordination` rests on the BAA + treatment relationship; `external_disclosure`
+  requires signed authorization per **R.I. Gen. Laws § 5-37.3-4**. Consent older than
+  `meta.validity_days` (365) is treated as absent (fail-closed). NOT a model feature.
+- **escalation_state.json** — per-patient ladder state (`src/routing/escalation.py`),
+  additive and merged across ticks (restart-safe). `patients[pid]` carries
+  `current_round (0/1/2)`, `status`, frozen `predicted_break_date`,
+  `source_max_latency_days`, `unactionable_in_time`, per-scope `consent`,
+  `gated_actions`, `objective_outcome` (incl. `closed_on_round`), `current_dispatch`,
+  and `rounds[]` (each with `wait_until`/`escalate_at`/`effective_escalate_at`,
+  `dispatched_at`, `outcome`, and the provider-addressed 4-language `dispatch` body).
+- **retrain_labels.parquet** — harvested closed-loop labels (`src/models/retrain_labels.py`):
+  `patient_id, label_adherent, source_event_date, closed_on_round, refill_source,
+  loop_closed`. `closed_on_round`/`refill_source` are **metadata, never features**.
+- **labels_retrained.parquet** — a refreshed label file (`patient_id, pdc_180d,
+  has_30_day_gap`) with observed outcomes folded in; a drop-in replacement for
+  `labels.parquet` in a retraining run. `feature_panel.parquet` is never modified, so
+  features stay strictly pre-index.
+

@@ -26,10 +26,13 @@ so it is a faithful stand-in for "the pharmacy feed later confirmed a refill."
 
 SEAM FOR THE REAL FEED
 ----------------------
-``CurrentCareOutcomeSource`` is a documented NotImplementedError stub, mirroring
-``CurrentCareAdapter`` in pharmacy_source.py: once a CurrentCare DUA exists, the
-real refill/dispense events replace the label-derived outcome here and NOTHING
-else in the pipeline changes.  ``RefillOutcomeSource`` is the swap point.
+``RefillOutcomeSource`` is the swap point. ``ConnectorOutcomeSource`` wires it to
+the connector layer (src/sync/connectors/): the factory's fallback chain
+(Surescripts -> AE claims -> local) picks a source, and its dispense events become
+the outcomes here -- so replacing the demo's local synthetic source with a real AE
+claims export or a certified Surescripts connection changes nothing in this file.
+``CurrentCareOutcomeSource`` is a DEPRECATED stub (CurrentCare/RIQI was sunset;
+CRISP Shared Services is now RI's RHIO) kept only to document that dead end.
 
 CAVEAT to state to judges
 -------------------------
@@ -40,18 +43,20 @@ mechanism* (routed -> reached -> objectively confirmed), not proof of impact.
 
 Public API
 ----------
-RefillOutcome           dataclass: per-patient objective outcome
-RefillOutcomeSource     ABC: .outcomes_for(patient_ids) -> dict[pid, RefillOutcome]
-SyntheticOutcomeSource  reads labels.parquet (has_30_day_gap)
-CurrentCareOutcomeSource documented stub for the real RI CurrentCare HIE feed
-write_loop_outcomes()   CLI entry: routing_table.json -> loop_outcomes.json
+RefillOutcome            dataclass: per-patient objective outcome (+ refill_source/latency)
+RefillOutcomeSource      ABC: .outcomes_for(patient_ids) -> dict[pid, RefillOutcome]
+SyntheticOutcomeSource   reads labels.parquet (has_30_day_gap) directly
+ConnectorOutcomeSource   dispense events from the connector layer (the real path)
+CurrentCareOutcomeSource DEPRECATED stub (CurrentCare/RIQI sunset; CRISP is now the RHIO)
+write_loop_outcomes()    CLI entry: routing_table.json -> loop_outcomes.json
 """
 from __future__ import annotations
 
 import json
+import sys
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable, Optional
 
@@ -61,6 +66,15 @@ ROOT = Path(__file__).resolve().parents[2]
 LABELS_PATH = ROOT / "labels.parquet"
 ROUTING_TABLE_PATH = ROOT / "data" / "snapshots" / "routing_table.json"
 OUTCOMES_PATH = ROOT / "data" / "snapshots" / "loop_outcomes.json"
+
+# Match pdc.py's forward outcome window: the lookback the connector-backed source
+# scans for a qualifying dispense (the "before the predicted break" test itself is
+# escalation.py's job; this module only reports whether an objective refill was seen).
+FORWARD_WINDOW_DAYS = 180
+
+sys.path.insert(0, str(ROOT))
+from src.sync.connectors.base import PharmacyConnector  # noqa: E402
+from src.sync.connectors.factory import get_connector  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -79,6 +93,13 @@ class RefillOutcome:
     on_time_refill: bool
     event_date: Optional[str]
     source: str
+    # EXTENDED (2026-07-23, connector layer): which pharmacy source produced this
+    # observation and that source's typical latency in days. Additive with
+    # defaults so every existing consumer (retrain_labels.py, api/main.py) keeps
+    # reading the original keys unchanged; the escalation timers use the latency to
+    # avoid escalating a patient whose refill simply hasn't surfaced yet.
+    refill_source: Optional[str] = None
+    refill_latency_days: Optional[int] = None
 
 
 class RefillOutcomeSource(ABC):
@@ -119,12 +140,99 @@ class SyntheticOutcomeSource(RefillOutcomeSource):
                 on_time_refill=self._on_time[pid],
                 event_date=now,
                 source="synthetic_ri (labels-derived)",
+                # zero latency is a synthetic-data property only (see LocalFileConnector).
+                refill_source="synthetic_ri (labels-derived)",
+                refill_latency_days=0,
+            )
+        return out
+
+
+class ConnectorOutcomeSource(RefillOutcomeSource):
+    """Objective outcomes from a :class:`PharmacyConnector` (the real integration).
+
+    Turns the connector's dispense events into RefillOutcomes and records WHICH
+    source produced them and HOW LATE that source runs (``refill_source`` /
+    ``refill_latency_days``). Depends only on the connector INTERFACE -- the
+    concrete adapter is chosen by ``get_connector()`` (factory fallback chain
+    Surescripts -> AE claims -> local), so swapping the real feed in changes
+    nothing here.
+
+    Closure rule (unchanged in spirit): a patient the source *covers* who has at
+    least one confirmed **dispense** in the scan window is an on-time refill;
+    covered-but-no-dispense is a confirmed break; not covered at all is omitted
+    (not yet observed). Whether the refill beat the patient's predicted break DATE
+    is escalation.py's decision, not this module's -- here we only report the
+    objective observation and its date.
+    """
+
+    def __init__(
+        self,
+        connector: Optional[PharmacyConnector] = None,
+        *,
+        lookback_days: int = FORWARD_WINDOW_DAYS,
+        as_of: Optional[str] = None,
+    ):
+        if connector is None:
+            # Factory already authenticated the selected source (and wrote the
+            # sync-state trace); don't re-authenticate it.
+            self._connector = get_connector()
+        else:
+            self._connector = connector
+            self._connector.authenticate()
+        self._profile = self._connector.source_profile
+        self._lookback_days = lookback_days
+        self._as_of = as_of
+
+    def outcomes_for(self, patient_ids: Iterable[str]) -> dict[str, RefillOutcome]:
+        ids = [str(p) for p in patient_ids]
+        end = self._as_of or datetime.now(timezone.utc).date().isoformat()
+        start = (datetime.fromisoformat(end).date() - timedelta(days=self._lookback_days)).isoformat()
+
+        events = self._connector.fetch_dispense_events(ids, start, end)
+        covered = self._connector.covered_patient_ids(ids)
+
+        # Earliest confirmed dispense per patient (prescription-only events, if any
+        # source ever emits them, never close the loop).
+        first_dispense: dict[str, str] = {}
+        for e in events:
+            if not e.is_dispense:
+                continue
+            prior = first_dispense.get(e.patient_id)
+            if prior is None or e.dispense_date < prior:
+                first_dispense[e.patient_id] = e.dispense_date
+
+        src_name = self._profile.source_name
+        latency = self._profile.typical_latency_days
+        out: dict[str, RefillOutcome] = {}
+        for pid in ids:
+            if pid not in covered:
+                continue  # source has no record for this patient -> not yet observed
+            on_time = pid in first_dispense
+            out[pid] = RefillOutcome(
+                patient_id=pid,
+                observed=True,
+                on_time_refill=on_time,
+                # dispense date if refilled; else the detection ("as of") date.
+                event_date=first_dispense[pid] if on_time else end,
+                source=src_name,
+                refill_source=src_name,
+                refill_latency_days=latency,
             )
         return out
 
 
 class CurrentCareOutcomeSource(RefillOutcomeSource):
-    """Real-integration stub: objective refill outcomes from RI's CurrentCare HIE.
+    """DEPRECATED real-integration stub: objective refill outcomes from RI's CurrentCare HIE.
+
+    DEPRECATED (2026-07-23): RIQI/CurrentCare was **sunset**; Rhode Island's RHIO
+    is now **CRISP Shared Services**. Do not build on this class. Third-party HIE
+    access requires state designation plus a multi-party DUA, and even then CRISP's
+    surface (like CurrentCare's) is ADT/encounter and prescription-list data, not a
+    clean antihypertensive *dispense* feed. The dispense/refill signal now comes
+    from the connector layer (src/sync/connectors/, via ``ConnectorOutcomeSource``
+    above): AE pharmacy claims for the automated backbone, Surescripts only
+    opportunistically. A CRISP adapter is intentionally NOT built; its seam would
+    be a new ``PharmacyConnector`` in the connectors package (see factory.py).
 
     NOT IMPLEMENTED -- requires a data-use agreement, same as
     pharmacy_source.CurrentCareAdapter. Intended behavior: a routed patient's
@@ -186,23 +294,37 @@ def write_loop_outcomes(
 ) -> dict:
     """Compute objective outcomes for the current worklist and write a JSON map.
 
-    Output shape (consumed read-only by src/api/main.py):
+    Defaults to the connector-backed source (``ConnectorOutcomeSource`` → factory
+    fallback chain, which selects the local synthetic source in the demo), so the
+    real dispense-data path is exercised end to end. Pass an explicit ``source`` to
+    override (e.g. the dependency-free ``SyntheticOutcomeSource``).
+
+    Output shape (consumed read-only by src/api/main.py); EXTENDED 2026-07-23 with
+    ``refill_source`` / ``refill_latency_days`` on each outcome and in meta, keeping
+    every prior key:
         {
-          "meta": {"generated_at", "source", "n_routed", "n_observed",
-                   "n_on_time", "n_break"},
-          "outcomes": { patient_id: {observed, on_time_refill, event_date, source} }
+          "meta": {"generated_at", "source", "refill_source", "refill_latency_days",
+                   "closure_rule", "n_routed", "n_observed", "n_on_time", "n_break"},
+          "outcomes": { patient_id: {observed, on_time_refill, event_date, source,
+                                     refill_source, refill_latency_days} }
         }
     """
     routed = _routed_ids(routing_table_path)
-    src = source or SyntheticOutcomeSource()
+    src = source or ConnectorOutcomeSource()
     outcomes = detect_closures(routed, src)
 
     n_on_time = sum(1 for o in outcomes.values() if o.on_time_refill)
+    # Surface the source + its latency at the top level so the API's sync badge can
+    # show which feed produced these outcomes and how laggy it is. Read off a
+    # representative outcome (all share one source per run); None-safe if empty.
+    sample = next(iter(outcomes.values()), None)
     payload = {
         "meta": {
             "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "source": src.__class__.__name__,
-            "closure_rule": "objective on-time refill (has_30_day_gap == 0); never self-report",
+            "refill_source": sample.refill_source if sample else None,
+            "refill_latency_days": sample.refill_latency_days if sample else None,
+            "closure_rule": "objective confirmed dispense; never self-report",
             "n_routed": len(routed),
             "n_observed": len(outcomes),
             "n_on_time": n_on_time,

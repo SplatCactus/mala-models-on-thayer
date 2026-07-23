@@ -31,22 +31,40 @@ dictionary) · Annie (SHAP, fairness, routing).
 
 ## Results snapshot (300K-derived cohort)
 
-- Cohort: **16,205** treated-hypertensive incident users; **2,356** observed
-  ≥30-day gap events in the 180-day outcome window
-- Primary model: shallow random forest (binary classification of 30-day gap
-  risk; see `MODEL_CARD.md` for the July 2 pivot from the survival framing
-  and why)
-- Discrimination: AUC **0.571** overall (modest — expected on synthetic
-  data; the deliverable is the validated workflow, not the point estimate)
+Every figure below is reproducible by running the code as it stands:
+`python src/eval/run_auc.py` → `data/snapshots/auc_report.json` (the single
+source of truth for discrimination), and `python -m src.run_routing_pipeline`
+→ the routing + fairness snapshots.
+
+- Cohort: **16,205** treated-hypertensive incident users; **2,362** observed
+  ≥30-day gap events in the 180-day outcome window (14.6% event rate)
+- Primary model: **HistGradientBoostingClassifier** (gradient-boosted trees) on a
+  33-feature leakage-safe panel. Logistic regression is kept as an interpretable
+  baseline. The SHAP explainer that scores the routing pipeline uses this same
+  primary model, so `routing_table.json` reflects the strong model (see
+  `MODEL_CARD.md` for family, hyperparameters, and pivot history).
+- Discrimination (honest, strictly out-of-fold, 5-fold stratified CV): ROC-AUC
+  **0.857** for the primary model vs **0.681** for logistic regression; PR-AUC for
+  the gap event **0.596** against a 0.146 no-skill baseline. (This replaces the
+  earlier **0.571** figure, which came from a weak 10-feature logistic model that
+  used to score the pipeline and has since been removed from the scoring path.)
 - **Fairness audit:** selection into the capped worklist passes the 80%
-  disparate-impact rule (min/max ratio **0.87**); subgroup AUC is slightly
-  *higher* for Hispanic patients (0.586 vs 0.568). See
-  `data/snapshots/fairness_report.json`
-- **Leakage discipline:** `tests/test_leakage.py` caught a real lookback
-  bug in BP trajectory features during development; all reported numbers
-  are post-fix (documented in `MODEL_CARD.md`)
+  disparate-impact rule (min/max selection-rate ratio **0.9933**); out-of-fold
+  subgroup ROC-AUC is comparable across groups (Hispanic **0.846** vs
+  non-Hispanic **0.859**). See `data/snapshots/fairness_report.json`. Note: that
+  file's *overall* AUC field is **in-sample** (the deployed pipeline scores the
+  cohort it fit, and a tree model memorizes training rows), so it is not a
+  generalization claim — the honest number is the out-of-fold **0.857** above.
+- **Leakage discipline:** demographics (race / ethnicity / gender / income / ZIP /
+  geo / healthcare-cost) are held out of the model by an allowlist in
+  `src/models/common.py`; `tests/test_leakage.py` + `tests/test_pre_index_leakage.py`
+  (**31 tests, all passing**) enforce the strictly-pre-index feature rule.
 - Routing: 942-patient worklist capped by role capacity
   (CHW call / social worker / pharmacist), with EN/ES rationale per patient
+- **Synthetic-data ceiling:** Synthea models adherence as a stable per-patient
+  trait, so pre-index cross-drug refill behavior predicts post-index antihypertensive
+  adherence more cleanly than it would on real EHR data — treat 0.857 as a
+  synthetic-data ceiling, not a real-world estimate.
 
 ## Quickstart — run the demo
 

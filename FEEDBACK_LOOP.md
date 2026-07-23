@@ -59,17 +59,71 @@ For a **real** build, the refill feed is the hardest part:
 `sync/loop_closure.CurrentCareOutcomeSource` is the documented seam for whatever
 real feed replaces the label-derived outcome; nothing upstream changes.
 
+## Escalation ladder (Rounds 0/1/2) — implemented 2026-07-23
+
+State 1 "Routed" is now the entry to a **timed, latency-adjusted, consent-gated
+escalation ladder**, all server-side and provider-only (we never message a patient):
+
+- **Round 0 — CHW → pharmacy** (all patients): dispatch goes to the AE's CHW with
+  an instruction to contact the pharmacy. We never contact a pharmacy directly.
+- **Round 1 — SDOH-specific** (only if no refill): dominant SHAP driver →
+  social worker / pharmacist / bilingual CHW, or a **transit voucher** (the only
+  *external* disclosure). Transport is **consent-gated**: without external
+  authorization it falls back to CHW-mediated internal transport help — never dropped.
+- **Round 2 — escalate to the AE prescriber** (only if Round 1 fails): the dispatch
+  body composes the **complete prior history** (every round, recipient, date, outcome).
+- **Success at any round** = an objective dispense before the predicted break date →
+  loop CLOSED, `closed_on_round` recorded.
+
+What's in code now:
+- `src/routing/escalation.py` — pure, deterministic state machine (`now` injected).
+  Statuses: WAITING · WAIT_ELAPSED_DISPATCH_PENDING · DISPATCHED ·
+  WAITING_ON_DATA_LATENCY · GATED_ON_CONSENT · CLOSED · EXHAUSTED. State is fully
+  derivable from persisted data → `data/snapshots/escalation_state.json` (additive,
+  merges across ticks; restart-safe). Timers derive from the frozen predicted break
+  date and are **adjusted upward by the active source's max latency** so we never
+  escalate for "no refill" before the confirming feed would have shown one.
+- `src/routing/consent.py` — two scopes: `internal_care_coordination` (BAA + treatment)
+  and `external_disclosure` (R.I. Gen. Laws § 5-37.3-4 signed authorization). Fail-closed;
+  "unknown" is distinct from "denied"; a staleness window (365d) treats old consent as
+  absent. Synthetic `data/snapshots/consent.json` (documented synthetic).
+- `src/routing/dispatch_messages.py` — provider-addressed, four-language dispatch
+  bodies + a labeled CHW/prescriber read-aloud script. `addressed_to` is always
+  `provider_or_organization`.
+- `src/sync/connectors/` — the dispense-data connector layer (Surescripts stub →
+  AE claims → local fallback chain) with per-source latency + access-mode metadata,
+  written to `data/snapshots/pharmacy_sync_state.json`.
+- `src/sync/escalation_job.py` — ticks the machine (reuses sync_job's fit-once/score
+  machinery), with a clearly-labeled `--simulate-days-per-tick` demo affordance.
+- `src/api/main.py` — serves the per-patient escalation block + funnel + pharmacy
+  source; see `API_CONTRACT.md`.
+
+The old **States 2/3** (Acknowledged/Actioned) remain the CHW's client-side subjective
+progress; the loop still CLOSES only on the objective refill, never on self-report.
+
 ## State 4 → retraining
 
 Closed loops are fresh, real-world-observed labels: `on_time_refill` → `y=1`
-(adherent), confirmed break → `y=0`. `models/retrain_labels.py` harvests them.
-It is a **stub with a runnable demo path** — the production path
-(`mode="production"`) raises `NotImplementedError` because it first needs:
-(1) State-3 action state persisted **server-side** (localStorage can't be read),
-(2) a real closure feed + CurrentCare↔cohort id crosswalk, and
-(3) **selection-bias correction** (closed-loop labels are only the routed/actioned
-subset). Retraining on synthetic labels re-affirms existing signal; it cannot
-prove intervention *lift*.
+(adherent → `has_30_day_gap=0`), confirmed break → `y=0`.
+`models/retrain_labels.py` now harvests each observed loop into
+`data/snapshots/retrain_labels.parquet` as
+`(patient_id, label_adherent, source_event_date, closed_on_round, refill_source,
+loop_closed)`, and `refresh_labels()` merges the labels into
+`data/snapshots/labels_retrained.parquet` — a drop-in replacement for
+`labels.parquet` in a retraining run. **`closed_on_round` and `refill_source` are
+metadata, never features** (they describe post-index events); `feature_panel.parquet`
+is never touched, so features stay strictly pre-index (asserted by
+`tests/test_retrain_labels.py`).
+
+**What this proves / doesn't:** it demonstrates the *architecture* supports
+continuous learning — observed outcomes flow back into a training-ready label set
+with the leakage guard intact. It does **not** claim retraining is validated on real
+patients; on synthetic data the objective label is the ground-truth outcome
+regardless of intervention, so retraining re-affirms existing signal rather than
+demonstrating *lift*. The production path (`mode="production"`) still raises
+`NotImplementedError`: it first needs (1) server-side State-3 action gating,
+(2) a real dispense feed + id crosswalk, and (3) **selection-bias correction**
+(closed-loop labels are only the routed/actioned subset).
 
 ## Dependencies / open items
 - **ROI (Release of Information) protocol** for the State 3 → 4 human handoff —
@@ -83,9 +137,14 @@ prove intervention *lift*.
 ## Run it
 
 ```bash
-python -m src.run_routing_pipeline          # State 1: produce routing_table.json
-python -m src.sync.loop_closure             # State 4: produce loop_outcomes.json
-python -m uvicorn src.api.main:app --port 8000   # serve worklist + outcomes
-# open src/ui/dashboard.html  → States 2/3 tracked in localStorage
-python -m src.models.retrain_labels         # State 4 → retraining labels (demo stub)
+python -m src.run_routing_pipeline          # State 1: routing_table.json (worklist + fairness)
+python -m src.sync.loop_closure             # State 4: loop_outcomes.json + pharmacy_sync_state.json
+python -m src.routing.consent               # synthetic consent.json (demo)
+python -m src.routing.escalation            # escalation_state.json (Rounds 0/1/2 + dispatch bodies)
+python -m uvicorn src.api.main:app --port 8000   # serve worklist + escalation (see API_CONTRACT.md)
+# live compressed-time demo (optional):
+python -m src.sync.escalation_job --simulate-days-per-tick 30 --max-ticks 6
+# State 4 → retraining labels + refreshed labels file (demo):
+python -m src.models.retrain_labels
+# frontend is rebuilt separately; it consumes only the API (src/ui/dashboard.html is legacy)
 ```

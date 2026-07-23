@@ -11,10 +11,11 @@ For tabular EHR data — mixed-scale numeric features, binary flags, native
 missingness, non-linear interactions — GBDT is the correct default, and it wins
 empirically. On the enriched 33-feature panel (BP trajectory + SDOH + the
 pre-index cross-drug behavioral features in src/features/pre_index.py), honest
-out-of-fold ROC-AUC is **HGB 0.848 vs random forest 0.837 / logistic 0.681**
-(see src/eval/run_auc.py). Logistic regression is kept as a lightweight,
-interpretable baseline; the shallow random forest is kept only as a labeled
-baseline — it is dominated by HGB and its ``max_depth=12`` overfits badly
+out-of-fold ROC-AUC is **HGB 0.857 vs shallow random forest 0.834 / logistic
+0.681** — reproduced in data/snapshots/auc_report.json (run src/eval/run_auc.py),
+the single source of truth for these numbers. Logistic regression is kept as a
+lightweight, interpretable baseline; the shallow random forest is kept only as a
+labeled baseline — it is dominated by HGB and its ``max_depth=12`` overfits badly
 (in-sample ROC-AUC 0.93).
 
 The jump from the BP/SDOH-only panel (HGB 0.643) is driven by feature richness,
@@ -23,7 +24,7 @@ each individually weak (max univariate |AUC-0.5| ~0.15, so no single-feature
 outcome leak) but combine strongly. Caveat: Synthea models medication adherence
 as a stable per-patient trait, so pre-index non-antihypertensive refill behavior
 predicts post-index antihypertensive adherence more cleanly than it would on
-real EHR data — treat 0.848 as a synthetic-data ceiling, not a real-world one.
+real EHR data — treat 0.857 as a synthetic-data ceiling, not a real-world one.
 
 The original 2026-07-02 rationale said "simple, low-variance models only --
 Logistic Regression or a shallow Random Forest; hold off on XGBoost/neural nets
@@ -208,9 +209,9 @@ def build_hist_gradient_boosting(**overrides) -> Pipeline:
 
     GBDT is the right default for tabular EHR data: it handles mixed-scale
     numeric + binary-flag features, native missingness, and non-linear feature
-    interactions, and it is the empirical winner (out-of-fold ROC-AUC 0.848 vs
-    random forest 0.837 / logistic 0.681 on the 33-feature panel; see
-    src/eval/run_auc.py).
+    interactions, and it is the empirical winner (out-of-fold ROC-AUC 0.857 vs
+    shallow random forest 0.834 / logistic 0.681 on the 33-feature panel; see
+    data/snapshots/auc_report.json, produced by src/eval/run_auc.py).
 
     No ``SimpleImputer``/``StandardScaler`` in the pipeline, unlike the logistic
     baseline: ``HistGradientBoostingClassifier`` bins features internally, so it
