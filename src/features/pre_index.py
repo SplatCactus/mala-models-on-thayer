@@ -19,9 +19,17 @@ payer churn       payer_n_switches        # payer changes among pre-index transi
 cross-drug        xdrug_n_distinct_meds   # distinct non-AH chronic meds ever pre-index
 mechanics         xdrug_refill_gap_mean   # mean same-drug refill gap, days (NaN if none)
                   xdrug_refill_gap_max    # worst same-drug refill gap, days (NaN if none)
+                  xdrug_refill_gap_cv     # CV (std/mean) of refill gaps (NaN if <2 gaps)
+                  xdrug_days_since_last_fill  # days from last non-AH fill to index
                   xdrug_tenure_days       # days from first non-AH rx to index
                   xdrug_n_prescribers     # distinct pre-index encounters (prescriber proxy)
                   xdrug_oop_cost_mean     # mean out-of-pocket per non-AH fill (NaN if none)
+acute-care        acute_n_ed_1y           # emergency encounters in prior 365d
+utilization       acute_n_inpatient_1y    # inpatient encounters in prior 365d
+                  acute_n_urgentcare_1y   # urgent-care encounters in prior 365d
+                  acute_days_since_last   # days since last acute contact (NaN if none)
+labs (obs)        lab_{a1c,creatinine,egfr,ldl}_latest  # most-recent pre-index value (NaN if none)
+                  lab_{a1c,creatinine,egfr,ldl}_slope   # OLS slope, units/day (NaN if <2 readings)
 
 Why the antihypertensive-specific pre-index metrics are NOT built
 -----------------------------------------------------------------
@@ -57,6 +65,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 # Reuse the union-coverage sweep from the PDC module so "days covered by any med"
@@ -73,6 +82,23 @@ BP_LOOKBACK_DAYS = 1095          # BP-reading engagement window (matches traject
 # BP LOINC codes (systolic + diastolic), source: code_dictionary.yaml.
 BP_LOINC_CODES = frozenset({"8480-6", "8462-4"})
 
+# Cardiometabolic lab LOINC codes for the pre-index lab-trajectory features.
+# name -> LOINC code. These are the codes ACTUALLY present in observations.parquet
+# (verified 2026-07-22): note LDL is 18262-6 ("by Direct assay"), NOT the 2089-1
+# listed in code_dictionary.yaml (that variant matches 0 rows here -- the same
+# product-vs-ingredient silent-zero trap the project memory warns about). A1c /
+# creatinine (serum) / eGFR match the dictionary.
+LAB_LOINC_CODES: dict[str, str] = {
+    "a1c": "4548-4",          # Hemoglobin A1c -- diabetes control
+    "creatinine": "2160-0",   # Creatinine, serum -- renal function
+    "egfr": "33914-3",        # eGFR (MDRD) -- renal function
+    "ldl": "18262-6",         # LDL cholesterol (direct) -- lipid burden
+}
+
+# Acute-care encounter classes (Synthea ENCOUNTERCLASS) that signal an unplanned,
+# high-acuity contact -- an ADT-style instability proxy that co-tracks adherence.
+ACUTE_ENCOUNTER_CLASSES = ("emergency", "inpatient", "urgentcare")
+
 DEFAULT_DAYS_SUPPLY = 30         # fallback coverage length when a fill has no valid STOP
 
 
@@ -80,6 +106,19 @@ def _to_naive_datetime(series: pd.Series) -> pd.Series:
     """Parse ISO date/datetime strings to tz-naive Timestamps (NaT on failure)."""
     parsed = pd.to_datetime(series, errors="coerce", utc=True)
     return parsed.dt.tz_convert(None)
+
+
+def _ols_slope(days: np.ndarray, values: np.ndarray) -> float:
+    """OLS slope of ``values`` regressed on ``days`` (units per day).
+
+    NaN when undefined: <2 readings or all readings on one day (zero time
+    variance). Matches trajectories._slope so lab slopes read the same way as
+    the BP slopes (positive == rising toward index_date).
+    """
+    if len(values) < 2 or np.ptp(days) == 0:
+        return float("nan")
+    slope, _ = np.polyfit(days, values, 1)
+    return float(slope)
 
 
 def _prep_source(
@@ -200,6 +239,80 @@ def _engagement(
     return n_enc, n_bp
 
 
+def _lab_features(
+    labs: pd.DataFrame, *, lookback_days: int = BP_LOOKBACK_DAYS,
+    lab_codes: dict[str, str] = LAB_LOINC_CODES,
+) -> dict[str, pd.Series]:
+    """Pre-index lab trajectories: most-recent value + OLS slope per lab.
+
+    ``labs`` is the cohort-slimmed observations frame (``_date`` / ``_idx`` +
+    ``CODE`` / ``VALUE``), already restricted upstream to ``lab_codes`` for speed.
+    For each lab we emit ``lab_{name}_latest`` (value of the reading closest to
+    index) and ``lab_{name}_slope`` (units/day, same convention as the BP slopes).
+    Both are NaN for a patient with no in-window reading of that lab (<2 for the
+    slope) -- consumed natively by the GBDT, like the ``sbp_*`` trajectory NaNs.
+    """
+    lb = pd.to_timedelta(lookback_days, unit="D")
+    lab = labs.copy()
+    lab["_code"] = lab["CODE"].astype(str)
+    lab["_val"] = pd.to_numeric(lab["VALUE"], errors="coerce")
+    lab = lab.dropna(subset=["_date", "_val"])
+    in_window = (lab["_date"] >= lab["_idx"] - lb) & (lab["_date"] < lab["_idx"])
+    lab = lab[in_window]
+
+    out: dict[str, pd.Series] = {}
+    for name, code in lab_codes.items():
+        sub = lab[lab["_code"] == code]
+        latest: dict = {}
+        slope: dict = {}
+        for pid, g in sub.groupby("PATIENT", sort=False):
+            dates = g["_date"]
+            days = (dates - g["_idx"].iloc[0]).dt.total_seconds().to_numpy(dtype=float) / 86400.0
+            vals = g["_val"].to_numpy(dtype=float)
+            latest[pid] = float(vals[dates.to_numpy().argmax()])  # closest to index
+            slope[pid] = _ols_slope(days, vals)
+        out[f"lab_{name}_latest"] = pd.Series(latest, dtype="float64")
+        out[f"lab_{name}_slope"] = pd.Series(slope, dtype="float64")
+    return out
+
+
+def _acute_care(
+    enc: pd.DataFrame, *, lookback_days: int = ADHERENCE_LOOKBACK_DAYS,
+    acute_classes: tuple[str, ...] = ACUTE_ENCOUNTER_CLASSES,
+    class_col: str = "ENCOUNTERCLASS",
+) -> dict[str, pd.Series]:
+    """Pre-index acute-care utilization from encounter class (ADT-style signal).
+
+    ``enc`` is the cohort-slimmed encounters frame (``_start`` / ``_idx``); it must
+    carry ``class_col``. Emits per-class visit counts in the prior
+    ``lookback_days`` (``acute_n_ed_1y`` / ``acute_n_inpatient_1y`` /
+    ``acute_n_urgentcare_1y``) plus ``acute_days_since_last`` = days from the most
+    recent acute contact (any of ``acute_classes``, over full pre-index history)
+    to index. Counts default to 0 downstream; recency stays NaN for a patient with
+    no acute contact (native to the GBDT). Returns ``{}`` if ``class_col`` is
+    absent (e.g. a minimal test frame) so the caller applies its defaults.
+    """
+    if class_col not in enc.columns:
+        return {}
+    lb = pd.to_timedelta(lookback_days, unit="D")
+    cls = enc[class_col].astype(str)
+    pre = enc["_start"] < enc["_idx"]
+    recent = pre & (enc["_start"] >= enc["_idx"] - lb)
+
+    out: dict[str, pd.Series] = {}
+    for name, klass in (("ed", "emergency"), ("inpatient", "inpatient"),
+                        ("urgentcare", "urgentcare")):
+        out[f"acute_n_{name}_1y"] = enc[recent & (cls == klass)].groupby("PATIENT").size()
+
+    acute = enc[pre & cls.isin(acute_classes)]
+    if not acute.empty:
+        grp = acute.groupby("PATIENT")
+        out["acute_days_since_last"] = (grp["_idx"].first() - grp["_start"].max()).dt.days
+    else:
+        out["acute_days_since_last"] = pd.Series(dtype="float64")
+    return out
+
+
 def _payer_switches(pt: pd.DataFrame, *, payer_col: str = "PAYER") -> pd.Series:
     """payer_n_switches: number of times the payer changes across pre-index transitions.
 
@@ -237,6 +350,10 @@ def _cross_drug_features(
     grp = m.groupby("PATIENT")
     feats["xdrug_n_distinct_meds"] = grp["_code"].nunique()
     feats["xdrug_tenure_days"] = (grp["_idx"].first() - grp["_start"].min()).dt.days
+    # Recency of engagement: days from the most recent non-AH fill to index. A
+    # long silence pre-index is a discontinuation-prone signal. Always defined
+    # here (m is non-empty and each row started before index).
+    feats["xdrug_days_since_last_fill"] = (grp["_idx"].first() - grp["_start"].max()).dt.days
     if has_enc and encounter_col in m.columns:
         feats["xdrug_n_prescribers"] = grp[encounter_col].nunique()
     if has_cost and total_cost_col in m.columns and payer_cov_col in m.columns:
@@ -249,9 +366,15 @@ def _cross_drug_features(
     m_sorted = m.sort_values(["PATIENT", "_code", "_start"])
     prev = m_sorted.groupby(["PATIENT", "_code"])["_start"].shift()
     gap = (m_sorted["_start"] - prev).dt.days
-    gap_stats = gap.groupby(m_sorted["PATIENT"]).agg(["mean", "max"])
+    gap_stats = gap.groupby(m_sorted["PATIENT"]).agg(["mean", "max", "std"])
     feats["xdrug_refill_gap_mean"] = gap_stats["mean"]
     feats["xdrug_refill_gap_max"] = gap_stats["max"]
+    # Coefficient of variation of refill gaps (std/mean): dispersion of fill
+    # timing, scale-free. Erratic refilling (high CV) predicts future gaps beyond
+    # the mean gap alone. NaN when a patient has <2 gaps (std undefined, ddof=1)
+    # or a zero mean -- native to the GBDT. gap_stats["std"] is population-over-
+    # patient std of the per-drug gaps for that patient.
+    feats["xdrug_refill_gap_cv"] = gap_stats["std"] / gap_stats["mean"].replace(0, np.nan)
     return feats
 
 
@@ -262,6 +385,7 @@ def compute_pre_index_features(
     encounters_df: pd.DataFrame,
     vitals_df: pd.DataFrame,
     payer_transitions_df: pd.DataFrame,
+    labs_df: pd.DataFrame | None = None,
     *,
     cohort_patient_col: str = "patient_id",
     index_date_col: str = "index_date",
@@ -299,7 +423,8 @@ def compute_pre_index_features(
 
     cond = _prep_source(conditions_df, cohort_ids, cohort_idx,
                         date_cols=("START",), keep_cols=("CODE",))
-    enc = _prep_source(encounters_df, cohort_ids, cohort_idx, date_cols=("START",))
+    enc = _prep_source(encounters_df, cohort_ids, cohort_idx,
+                       date_cols=("START",), keep_cols=("ENCOUNTERCLASS",))
     enc = enc.dropna(subset=["_start"])
     vit_all = _prep_source(vitals_df, cohort_ids, cohort_idx,
                            date_cols=("DATE",), keep_cols=("CODE",))
@@ -308,6 +433,16 @@ def compute_pre_index_features(
                        date_cols=("START_DATE",), keep_cols=("PAYER",))
     pay = pay.dropna(subset=["_start_date"])
 
+    # Labs are optional: a caller (or a minimal test frame) may not supply them.
+    # When absent, the lab_* columns are emitted all-NaN so the panel schema is
+    # stable regardless of whether observations were passed.
+    if labs_df is not None and len(labs_df):
+        labs = _prep_source(labs_df, cohort_ids, cohort_idx,
+                            date_cols=("DATE",), keep_cols=("CODE", "VALUE"))
+        labs = labs.dropna(subset=["_date"])
+    else:
+        labs = None
+
     # --- Compute features from the slim frames -------------------------------
     n_cond = _comorbidity_counts(cond)
     n_active, n_recent = _regimen_counts(meds)
@@ -315,6 +450,8 @@ def compute_pre_index_features(
     n_enc, n_bp = _engagement(enc, vit)
     n_switch = _payer_switches(pay)
     xdrug = _cross_drug_features(meds, has_enc=has_enc, has_cost=has_cost)
+    acute = _acute_care(enc)
+    lab_feats = _lab_features(labs) if labs is not None else {}
 
     def _int_col(series: pd.Series) -> pd.Series:
         return key.map(series).fillna(0).astype("int64")
@@ -339,5 +476,21 @@ def compute_pre_index_features(
     out["xdrug_n_prescribers"] = _int_col(xdrug.get("xdrug_n_prescribers", pd.Series(dtype="float64")))
     out["xdrug_refill_gap_mean"] = _float_col(xdrug.get("xdrug_refill_gap_mean", pd.Series(dtype="float64")), None)
     out["xdrug_refill_gap_max"] = _float_col(xdrug.get("xdrug_refill_gap_max", pd.Series(dtype="float64")), None)
+    out["xdrug_refill_gap_cv"] = _float_col(xdrug.get("xdrug_refill_gap_cv", pd.Series(dtype="float64")), None)
+    out["xdrug_days_since_last_fill"] = _int_col(xdrug.get("xdrug_days_since_last_fill", pd.Series(dtype="float64")))
     out["xdrug_oop_cost_mean"] = _float_col(xdrug.get("xdrug_oop_cost_mean", pd.Series(dtype="float64")), None)
+
+    # Acute-care utilization. Counts default to 0; recency (days-since-last) stays
+    # NaN for a patient with no acute contact (native to the GBDT).
+    out["acute_n_ed_1y"] = _int_col(acute.get("acute_n_ed_1y", pd.Series(dtype="float64")))
+    out["acute_n_inpatient_1y"] = _int_col(acute.get("acute_n_inpatient_1y", pd.Series(dtype="float64")))
+    out["acute_n_urgentcare_1y"] = _int_col(acute.get("acute_n_urgentcare_1y", pd.Series(dtype="float64")))
+    out["acute_days_since_last"] = _float_col(acute.get("acute_days_since_last", pd.Series(dtype="float64")), None)
+
+    # Lab trajectories (A1c / creatinine / eGFR / LDL): latest value + slope, both
+    # NaN when the patient has no in-window reading of that lab (native to the GBDT).
+    for name in LAB_LOINC_CODES:
+        for suffix in ("latest", "slope"):
+            col = f"lab_{name}_{suffix}"
+            out[col] = _float_col(lab_feats.get(col, pd.Series(dtype="float64")), None)
     return out
